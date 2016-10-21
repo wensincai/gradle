@@ -46,7 +46,7 @@ public class LifecycleProjectEvaluator implements ProjectEvaluator {
             return;
         }
 
-        buildOperationExecutor.run(BuildOperationDetails.displayName("Configure project: " + project.getPath()).build(), new Runnable() {
+        buildOperationExecutor.run(BuildOperationDetails.displayName("Configure project " + project.getPath()).build(), new Runnable() {
             @Override
             public void run() {
                 doEvaluate(project, state);

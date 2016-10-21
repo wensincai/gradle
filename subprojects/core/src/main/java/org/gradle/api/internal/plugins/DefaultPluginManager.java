@@ -130,10 +130,11 @@ public class DefaultPluginManager implements PluginManagerInternal {
             } else {
                 final Runnable adder = addPluginInternal(plugin);
                 if (adder != null) {
-                    buildOperationExecutor.run(BuildOperationDetails.displayName("Apply plugin: " + pluginClass.getName()).build(), new Runnable() {
+                    final PluginId pluginId = plugin.getPluginId();
+                    String pluginOpName = pluginId != null ? pluginId.toString() : pluginClass.getName();
+                    buildOperationExecutor.run(BuildOperationDetails.displayName("Apply plugin " + pluginOpName).build(), new Runnable() {
                         @Override
                         public void run() {
-                            PluginId pluginId = plugin.getPluginId();
                             String pluginIdStr = pluginId == null ? null : pluginId.toString();
                             if (plugin.isImperative()) {
                                 Plugin<?> pluginInstance = producePluginInstance(pluginClass);
