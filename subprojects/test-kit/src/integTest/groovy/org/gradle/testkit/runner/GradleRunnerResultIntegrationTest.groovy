@@ -32,21 +32,50 @@ class GradleRunnerResultIntegrationTest extends BaseGradleRunnerIntegrationTest 
             task helloWorld
 
             task byeWorld {
+                dependsOn helloWorld
                 onlyIf {
                     false
                 }
             }
+
+            task cacheable {
+                dependsOn byeWorld
+
+                def outputFile = file("output")
+
+                outputs.cacheIf { true }
+                outputs.file outputFile
+
+                doLast {
+                    outputFile.text = "done"
+                }
+            }
         """
 
+        file("gradle.properties") << "org.gradle.cache.tasks=true"
         when:
-        def result = runner('helloWorld', 'byeWorld')
+        def result = runner('helloWorld', 'byeWorld', 'cacheable').forwardOutput()
             .build()
 
         then:
-        result.tasks.collect { it.path } == [':helloWorld', ':byeWorld']
+        result.tasks.collect { it.path } == [':helloWorld', ':byeWorld', ':cacheable']
+        result.taskPaths(SUCCESS) == [':cacheable']
+        result.taskPaths(SKIPPED) == [':byeWorld']
+        result.taskPaths(UP_TO_DATE) == [':helloWorld']
+        result.taskPaths(FROM_CACHE) == []
+        result.taskPaths(FAILED).empty
+
+        when:
+        file("output").delete()
+        and:
+        result = runner('helloWorld', 'byeWorld', 'cacheable').forwardOutput().build()
+
+        then:
+        result.tasks.collect { it.path } == [':helloWorld', ':byeWorld', ':cacheable']
         result.taskPaths(SUCCESS) == []
         result.taskPaths(SKIPPED) == [':byeWorld']
         result.taskPaths(UP_TO_DATE) == [':helloWorld']
+        result.taskPaths(FROM_CACHE) == [':cacheable']
         result.taskPaths(FAILED).empty
     }
 

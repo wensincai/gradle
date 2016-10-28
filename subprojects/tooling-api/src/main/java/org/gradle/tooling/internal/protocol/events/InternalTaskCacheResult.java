@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 the original author or authors.
+ * Copyright 2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,8 @@
  * limitations under the License.
  */
 
-package org.gradle.tooling.internal.provider.events;
+package org.gradle.tooling.internal.protocol.events;
 
-import org.gradle.tooling.internal.protocol.events.InternalTaskResult;
-
-public abstract class AbstractTaskResult extends AbstractResult implements InternalTaskResult {
-    protected AbstractTaskResult(long startTime, long endTime, String outcomeDescription) {
-        super(startTime, endTime, outcomeDescription);
-    }
-
-    @Override
-    public boolean isFromCache() {
-        return false;
-    }
+public interface InternalTaskCacheResult {
+    boolean isFromCache();
 }

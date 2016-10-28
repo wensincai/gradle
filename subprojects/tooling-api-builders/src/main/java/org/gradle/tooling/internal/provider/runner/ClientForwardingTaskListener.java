@@ -19,6 +19,7 @@ package org.gradle.tooling.internal.provider.runner;
 import org.gradle.api.execution.internal.InternalTaskExecutionListener;
 import org.gradle.api.execution.internal.TaskOperationInternal;
 import org.gradle.api.internal.TaskInternal;
+import org.gradle.api.internal.tasks.TaskExecutionOutcome;
 import org.gradle.api.internal.tasks.TaskStateInternal;
 import org.gradle.initialization.BuildEventConsumer;
 import org.gradle.internal.progress.OperationResult;
@@ -73,13 +74,13 @@ class ClientForwardingTaskListener implements InternalTaskExecutionListener {
         long endTime = result.getEndTime();
 
         if (state.getUpToDate()) {
-            return new DefaultTaskSuccessResult(startTime, endTime, true);
+            return new DefaultTaskSuccessResult(startTime, endTime, true, state.getOutcome() == TaskExecutionOutcome.FROM_CACHE, state.getSkipMessage());
         } else if (state.getSkipped()) {
             return new DefaultTaskSkippedResult(startTime, endTime, state.getSkipMessage());
         } else {
             Throwable failure = state.getFailure();
             if (failure == null) {
-                return new DefaultTaskSuccessResult(startTime, endTime, false);
+                return new DefaultTaskSuccessResult(startTime, endTime, false, state.getOutcome() == TaskExecutionOutcome.FROM_CACHE, "SUCCESS");
             } else {
                 return new DefaultTaskFailureResult(startTime, endTime, Collections.singletonList(DefaultFailure.fromThrowable(failure)));
             }

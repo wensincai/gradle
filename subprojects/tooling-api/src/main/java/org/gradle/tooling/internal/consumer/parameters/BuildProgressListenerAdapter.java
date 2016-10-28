@@ -252,7 +252,7 @@ public class BuildProgressListenerAdapter implements InternalBuildProgressListen
 
     private static TaskOperationResult toTaskResult(InternalTaskResult result) {
         if (result instanceof InternalTaskSuccessResult) {
-            return new DefaultTaskSuccessResult(result.getStartTime(), result.getEndTime(), ((InternalTaskSuccessResult) result).isUpToDate());
+            return new DefaultTaskSuccessResult(result.getStartTime(), result.getEndTime(), ((InternalTaskSuccessResult) result).isUpToDate(), result.isFromCache());
         } else if (result instanceof InternalTaskSkippedResult) {
             return new DefaultTaskSkippedResult(result.getStartTime(), result.getEndTime(), ((InternalTaskSkippedResult) result).getSkipMessage());
         } else if (result instanceof InternalTaskFailureResult) {

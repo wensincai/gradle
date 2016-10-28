@@ -47,5 +47,10 @@ public enum TaskOutcome {
      *
      * A task may be skipped if it had no work to do (e.g. no source to compile).
      */
-    SKIPPED
+    SKIPPED,
+
+    /**
+     * TODO:
+     */
+    FROM_CACHE;
 }
