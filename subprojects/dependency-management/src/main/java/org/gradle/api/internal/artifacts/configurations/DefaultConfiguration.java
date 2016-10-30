@@ -24,6 +24,7 @@ import org.gradle.api.Attribute;
 import org.gradle.api.AttributeContainer;
 import org.gradle.api.DomainObjectSet;
 import org.gradle.api.InvalidUserDataException;
+import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.DependencyResolutionListener;
@@ -39,6 +40,7 @@ import org.gradle.api.artifacts.ResolvedConfiguration;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.result.ResolutionResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
+import org.gradle.api.artifacts.transform.DependencyTransform;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ClosureBackedAction;
 import org.gradle.api.internal.CompositeDomainObjectSet;
@@ -72,6 +74,7 @@ import org.gradle.internal.component.local.model.DefaultLocalComponentMetadata;
 import org.gradle.internal.component.model.ComponentResolveMetadata;
 import org.gradle.internal.event.ListenerBroadcast;
 import org.gradle.internal.event.ListenerManager;
+import org.gradle.internal.reflect.DirectInstantiator;
 import org.gradle.listener.ClosureBackedMethodInvocationDispatch;
 import org.gradle.util.CollectionUtils;
 import org.gradle.util.WrapUtil;
@@ -353,6 +356,12 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
     public FileCollection fileCollection(Dependency... dependencies) {
         return new ConfigurationFileCollection(WrapUtil.toLinkedSet(dependencies));
+    }
+
+    public <T extends DependencyTransform> FileCollection transform(Class<T> transformType, Action<T> config) {
+        T transform = DirectInstantiator.INSTANCE.newInstance(transformType);
+        config.execute(transform);
+        return new TransformedFileCollection(transform);
     }
 
     public void markAsObserved(InternalState requestedState) {
@@ -733,6 +742,27 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
         public Set<File> getFiles() {
             return doGetFiles(dependencySpec);
+        }
+    }
+
+    class TransformedFileCollection extends ConfigurationFileCollection {
+        private final DependencyTransform transform;
+
+        public TransformedFileCollection(DependencyTransform transform) {
+            super(Specs.<Dependency>satisfyAll());
+            this.transform = transform;
+        }
+
+        @Override
+        public Set<File> getFiles() {
+            Set<File> inputFiles = super.getFiles();
+            Set<File> outputFiles = CollectionUtils.collect(inputFiles, new Transformer<File, File>() {
+                @Override
+                public File transform(File file) {
+                    return transform.transform(file);
+                }
+            });
+            return outputFiles;
         }
     }
 

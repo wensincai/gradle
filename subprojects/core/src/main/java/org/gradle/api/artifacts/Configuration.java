@@ -21,6 +21,7 @@ import org.gradle.api.Action;
 import org.gradle.api.Attribute;
 import org.gradle.api.AttributeContainer;
 import org.gradle.api.Incubating;
+import org.gradle.api.artifacts.transform.DependencyTransform;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.TaskDependency;
@@ -253,6 +254,8 @@ public interface Configuration extends FileCollection {
      * @return The FileCollection with a subset of dependencies of this configuration.
      */
     FileCollection fileCollection(Dependency... dependencies);
+
+    <T extends DependencyTransform> FileCollection transform(Class<T> transformType, Action<T> config);
 
     /**
      * Resolves this configuration. This locates and downloads the files which make up this configuration, and returns
