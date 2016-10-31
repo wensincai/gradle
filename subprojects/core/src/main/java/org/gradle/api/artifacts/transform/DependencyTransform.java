@@ -18,6 +18,18 @@ package org.gradle.api.artifacts.transform;
 
 import java.io.File;
 
-public interface DependencyTransform {
-    File transform(File in);
+public abstract class DependencyTransform {
+    private File outputDirectory;
+
+    public File getOutputDirectory() {
+        return outputDirectory;
+    }
+
+    public void setOutputDirectory(File outputDirectory) {
+        this.outputDirectory = outputDirectory;
+    }
+
+    public abstract void transform(File in);
+
+    public abstract File getOutput();
 }

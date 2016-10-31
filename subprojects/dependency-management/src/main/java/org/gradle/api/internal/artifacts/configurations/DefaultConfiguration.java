@@ -756,13 +756,15 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         @Override
         public Set<File> getFiles() {
             Set<File> inputFiles = super.getFiles();
-            Set<File> outputFiles = CollectionUtils.collect(inputFiles, new Transformer<File, File>() {
+            transform.getOutputDirectory().mkdirs();
+            return CollectionUtils.collect(inputFiles, new Transformer<File, File>() {
                 @Override
                 public File transform(File file) {
-                    return transform.transform(file);
+                    // TODO:DAZ Should really have a new instance each time, I suppose.
+                    transform.transform(file);
+                    return transform.getOutput();
                 }
             });
-            return outputFiles;
         }
     }
 

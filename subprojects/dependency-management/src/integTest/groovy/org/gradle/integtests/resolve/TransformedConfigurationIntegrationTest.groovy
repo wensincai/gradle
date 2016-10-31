@@ -41,23 +41,22 @@ class TransformedConfigurationIntegrationTest extends AbstractIntegrationSpec {
             }
             task resolve(type: Copy) {
                 from configurations.compile.transform(FileHasher) {
-                    baseDir = project.file("\${buildDir}/transformed")
+                    outputDirectory = project.file("\${buildDir}/transformed")
                 }
                 into "\${buildDir}/libs"
             }
 
-            class FileHasher implements org.gradle.api.artifacts.transform.DependencyTransform {
-                File baseDir
-                File transform(File input) {
-                    File output = new File(baseDir, input.name + ".md5")
+            class FileHasher extends org.gradle.api.artifacts.transform.DependencyTransform {
+                File output
+
+                void transform(File input) {
+                    output = new File(outputDirectory, input.name + ".md5")
                     println "Transforming \${input} to \${output}"
 
                     if (!output.exists()) {
                         def inputHash = com.google.common.io.Files.hash(input, com.google.common.hash.Hashing.md5())
-                        output.parentFile.mkdirs()
                         output << inputHash
                     }
-                    return output
                 }
             }
 """
