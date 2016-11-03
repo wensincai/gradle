@@ -744,6 +744,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
     }
     class TypedFileCollection extends AbstractFileCollection {
         private final String type;
+        private Set<File> transformedFiles;
 
         public TypedFileCollection(String type) {
             this.type = type;
@@ -755,7 +756,14 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         }
 
         @Override
-        public Set<File> getFiles() {
+        public synchronized Set<File> getFiles() {
+            if (transformedFiles == null) {
+                transformedFiles = createTransformedFiles();
+            }
+            return transformedFiles;
+        }
+
+        private Set<File> createTransformedFiles() {
             Set<ResolvedArtifact> artifacts = getArtifacts();
             Set<File> artifactFiles = Sets.newHashSet();
 
@@ -771,8 +779,6 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 return artifactFiles;
             }
 
-
-            // TODO:DAZ Caching the transformed outputs
             // TODO:DAZ Parallel evaluation
             for (ResolvedArtifact artifact : artifacts) {
                 // Attempt to transform each artifact
