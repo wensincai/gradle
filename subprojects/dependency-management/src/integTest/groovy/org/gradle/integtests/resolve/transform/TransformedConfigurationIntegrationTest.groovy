@@ -39,10 +39,13 @@ class TransformedConfigurationIntegrationTest extends AbstractIntegrationSpec {
             dependencies {
                 compile 'com.google.guava:guava:19.0'
             }
-            task resolve(type: Copy) {
-                from configurations.compile.transform('jar', FileHasher) {
+            configurations.compile.resolutionStrategy {
+                registerTransform('jar', 'md5', FileHasher) {
                     outputDirectory = project.file("\${buildDir}/transformed")
                 }
+            }
+            task resolve(type: Copy) {
+                from configurations.compile.withType('md5')
                 into "\${buildDir}/libs"
             }
 
@@ -61,7 +64,6 @@ class TransformedConfigurationIntegrationTest extends AbstractIntegrationSpec {
             }
 """
 
-        executer.withArgument "--debug"
         succeeds "resolve"
 
         then:

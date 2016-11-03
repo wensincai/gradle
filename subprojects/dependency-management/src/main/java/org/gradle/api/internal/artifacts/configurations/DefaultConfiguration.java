@@ -24,7 +24,6 @@ import org.gradle.api.Attribute;
 import org.gradle.api.AttributeContainer;
 import org.gradle.api.DomainObjectSet;
 import org.gradle.api.InvalidUserDataException;
-import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.DependencyResolutionListener;
@@ -75,7 +74,6 @@ import org.gradle.internal.component.local.model.DefaultLocalComponentMetadata;
 import org.gradle.internal.component.model.ComponentResolveMetadata;
 import org.gradle.internal.event.ListenerBroadcast;
 import org.gradle.internal.event.ListenerManager;
-import org.gradle.internal.reflect.DirectInstantiator;
 import org.gradle.listener.ClosureBackedMethodInvocationDispatch;
 import org.gradle.util.CollectionUtils;
 import org.gradle.util.WrapUtil;
@@ -357,12 +355,6 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
     public FileCollection fileCollection(Dependency... dependencies) {
         return new ConfigurationFileCollection(WrapUtil.toLinkedSet(dependencies));
-    }
-
-    public <T extends DependencyTransform> FileCollection transform(String fromType, Class<T> transformType, Action<T> config) {
-        T transform = DirectInstantiator.INSTANCE.newInstance(transformType);
-        config.execute(transform);
-        return new TransformedFileCollection(transform, fromType);
     }
 
     public FileCollection withType(String type) {
@@ -780,53 +772,6 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 }
             }
             return artifactFiles;
-        }
-
-        private Set<ResolvedArtifact> getArtifacts() {
-            synchronized (resolutionLock) {
-                ResolvedConfiguration resolvedConfiguration = getResolvedConfiguration();
-                if (getState() == State.RESOLVED_WITH_FAILURES) {
-                    resolvedConfiguration.rethrowFailure();
-                }
-                return resolvedConfiguration.getResolvedArtifacts();
-            }
-        }
-
-        @Override
-        public String getDisplayName() {
-            return DefaultConfiguration.this + " transformed artifacts";
-        }
-    }
-
-    class TransformedFileCollection extends AbstractFileCollection {
-        private final DependencyTransform transform;
-        private final String fromType;
-
-        public TransformedFileCollection(DependencyTransform transform, String fromType) {
-            this.transform = transform;
-            this.fromType = fromType;
-        }
-
-        @Override
-        public TaskDependency getBuildDependencies() {
-            return DefaultConfiguration.this.getBuildDependencies();
-        }
-
-        @Override
-        public Set<File> getFiles() {
-            Set<ResolvedArtifact> artifacts = getArtifacts();
-            transform.getOutputDirectory().mkdirs();
-            return CollectionUtils.collect(artifacts, new Transformer<File, ResolvedArtifact>() {
-                @Override
-                public File transform(ResolvedArtifact artifact) {
-                    if (artifact.getType().equals(fromType)) {
-                        // TODO:DAZ Should really have a new instance of transform each time, I suppose.
-                        transform.transform(artifact.getFile());
-                        return transform.getOutput();
-                    }
-                    return artifact.getFile();
-                }
-            });
         }
 
         private Set<ResolvedArtifact> getArtifacts() {

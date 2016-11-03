@@ -255,8 +255,6 @@ public interface Configuration extends FileCollection {
      */
     FileCollection fileCollection(Dependency... dependencies);
 
-    <T extends DependencyTransform> FileCollection transform(String fromType, Class<T> transformType, Action<T> config);
-
     FileCollection withType(String type);
 
     /**
