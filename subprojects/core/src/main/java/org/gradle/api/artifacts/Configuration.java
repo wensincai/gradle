@@ -257,6 +257,8 @@ public interface Configuration extends FileCollection {
 
     <T extends DependencyTransform> FileCollection transform(String fromType, Class<T> transformType, Action<T> config);
 
+    FileCollection withType(String type);
+
     /**
      * Resolves this configuration. This locates and downloads the files which make up this configuration, and returns
      * a {@link ResolvedConfiguration} that may be used to determine information about the resolve (including errors).

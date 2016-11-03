@@ -59,10 +59,17 @@ import java.nio.file.Paths
             maven { url '${mavenRepo.uri}' }
         }
 
-        def compileClasspath = configurations.compile.transform('aar', AarClassesExtractor) {
-            outputDirectory = project.file("transformed")
-            antBuilder = project.ant
+        configurations.compile.resolutionStrategy {
+            // Extract the classes directory from an Aar.
+            registerTransform('aar', 'classpath', AarClassesExtractor)  {
+                outputDirectory = project.file("transformed")
+                antBuilder = project.ant
+            }
+            // Jar is a classpath element
+            registerTransform('jar', 'classpath', IdentityTransform) {}
         }
+
+        def compileClasspath = configurations.compile.withType('classpath')
 
         task fakeCompile {
             dependsOn compileClasspath
@@ -92,6 +99,14 @@ import java.nio.file.Paths
 
             output = new File(explodedAar, "classes")
             assert output.exists()
+        }
+    }
+
+    class IdentityTransform extends org.gradle.api.artifacts.transform.DependencyTransform {
+        File output
+
+        void transform(File input) {
+            output = input
         }
     }
 

@@ -365,6 +365,10 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         return new TransformedFileCollection(transform, fromType);
     }
 
+    public FileCollection withType(String type) {
+        return new TypedFileCollection(type);
+    }
+
     public void markAsObserved(InternalState requestedState) {
         markThisObserved(requestedState);
         markParentsObserved(requestedState);
@@ -743,6 +747,54 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
         public Set<File> getFiles() {
             return doGetFiles(dependencySpec);
+        }
+    }
+    class TypedFileCollection extends AbstractFileCollection {
+        private final String type;
+
+        public TypedFileCollection(String type) {
+            this.type = type;
+        }
+
+        @Override
+        public TaskDependency getBuildDependencies() {
+            return DefaultConfiguration.this.getBuildDependencies();
+        }
+
+        @Override
+        public Set<File> getFiles() {
+            Set<ResolvedArtifact> artifacts = getArtifacts();
+            Set<File> artifactFiles = Sets.newHashSet();
+            for (ResolvedArtifact artifact : artifacts) {
+                if (artifact.getType().equals(type)) {
+                    artifactFiles.add(artifact.getFile());
+                } else {
+                    DependencyTransform transform =  getResolutionStrategy().getTransform(artifact.getType(), type);
+                    if (transform != null) {
+                        if (transform.getOutputDirectory() != null) {
+                            transform.getOutputDirectory().mkdirs();
+                        }
+                        transform.transform(artifact.getFile());
+                        artifactFiles.add(transform.getOutput());
+                    }
+                }
+            }
+            return artifactFiles;
+        }
+
+        private Set<ResolvedArtifact> getArtifacts() {
+            synchronized (resolutionLock) {
+                ResolvedConfiguration resolvedConfiguration = getResolvedConfiguration();
+                if (getState() == State.RESOLVED_WITH_FAILURES) {
+                    resolvedConfiguration.rethrowFailure();
+                }
+                return resolvedConfiguration.getResolvedArtifacts();
+            }
+        }
+
+        @Override
+        public String getDisplayName() {
+            return DefaultConfiguration.this + " transformed artifacts";
         }
     }
 
