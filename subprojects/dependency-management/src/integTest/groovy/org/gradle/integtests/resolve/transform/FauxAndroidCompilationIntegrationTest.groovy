@@ -160,7 +160,7 @@ import java.nio.file.Paths
         dependency "project(':android-lib')"
 
         then:
-        classpath '/transformed/android-lib.aar/classes'
+        classpath '/transformed/android-lib.aar/classes.jar'
     }
 
     def "local android library can expose classes directory directly as classpath artifact"() {
@@ -195,7 +195,7 @@ import java.nio.file.Paths
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
-        classpath '/transformed/ext-android-lib-1.0.aar/classes'
+        classpath '/transformed/ext-android-lib-1.0.aar/classes.jar'
     }
 
     def "compile dependencies include a combination of aars and jars"() {
@@ -207,9 +207,9 @@ import java.nio.file.Paths
 
         then:
         classpath '/java-lib/build/libs/java-lib.jar',
-            '/transformed/android-lib.aar/classes',
+            '/transformed/android-lib.aar/classes.jar',
             '/maven-repo/org/gradle/ext-java-lib/1.0/ext-java-lib-1.0.jar',
-            '/transformed/ext-android-lib-1.0.aar/classes'
+            '/transformed/ext-android-lib-1.0.aar/classes.jar'
     }
 
     def dependency(String notation) {
