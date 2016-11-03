@@ -67,9 +67,16 @@ import java.nio.file.Paths
             }
             // Jar is a classpath element in it's own right
             registerTransform('jar', 'classpath', IdentityTransform) {}
+
+            // Extract the manifest from an Aar.
+            registerTransform('aar', 'android-manifest', AarManifestExtractor)  {
+                outputDirectory = project.file("transformed")
+                antBuilder = project.ant
+            }
         }
 
         def compileClasspath = configurations.compile.withType('classpath')
+        def compileManifests = configurations.compile.withType('android-manifest')
 
         task fakeCompile {
             dependsOn compileClasspath
@@ -77,28 +84,48 @@ import java.nio.file.Paths
                 compileClasspath.each { println it.absolutePath - rootDir }
             }
         }
+
+        task printManifests {
+            dependsOn compileManifests
+            doLast {
+                compileManifests.each { println it.absolutePath - rootDir }
+                if (compileManifests.empty) {
+                    println 'no manifest found'
+                }
+            }
+        }
     }
 
-    class AarClassesExtractor extends org.gradle.api.artifacts.transform.DependencyTransform {
+    abstract class AarExtractor extends org.gradle.api.artifacts.transform.DependencyTransform {
         def antBuilder
         File output
 
         void transform(File input) {
             assert input.name.endsWith('.aar')
-            outputIsClassesDirOfExtractedArchive(input)
-        }
 
-        private void outputIsClassesDirOfExtractedArchive(def input) {
             def explodedAar = new File(outputDirectory, input.name)
-
             if (!explodedAar.exists()) {
                 antBuilder.unzip(src:  input,
                                  dest: explodedAar,
                                  overwrite: "false")
             }
 
-            output = new File(explodedAar, "classes.jar")
+            output = new File(explodedAar, getOutputPathInArchive())
             assert output.exists()
+        }
+
+        protected abstract String getOutputPathInArchive();
+    }
+
+    class AarClassesExtractor extends AarExtractor {
+        protected String getOutputPathInArchive() {
+            return "classes.jar"
+        }
+    }
+
+    class AarManifestExtractor extends AarExtractor {
+        protected String getOutputPathInArchive() {
+            return "AndroidManifest.xml"
         }
     }
 
@@ -190,7 +217,7 @@ import java.nio.file.Paths
         classpath '/maven-repo/org/gradle/ext-java-lib/1.0/ext-java-lib-1.0.jar'
     }
 
-    def "compile classpath includes classes dir from published android modules"() {
+    def "compile classpath includes classes jar from published android modules"() {
         when:
         dependency "'org.gradle:ext-android-lib:1.0'"
 
@@ -212,6 +239,43 @@ import java.nio.file.Paths
             '/transformed/ext-android-lib-1.0.aar/classes.jar'
     }
 
+    def "no manifest for local java library or published java module"() {
+        when:
+        dependency "project(':java-lib')"
+        dependency "'org.gradle:ext-java-lib:1.0'"
+
+        then:
+        manifest()
+    }
+
+    def "manifest returned for local android library"() {
+        when:
+        dependency "project(':android-lib')"
+
+        then:
+        manifest '/transformed/android-lib.aar/AndroidManifest.xml'
+    }
+
+    def "manifest returned for published android module"() {
+        when:
+        dependency "'org.gradle:ext-android-lib:1.0'"
+
+        then:
+        manifest '/transformed/ext-android-lib-1.0.aar/AndroidManifest.xml'
+    }
+
+    def "manifests returned for a combination of aars and jars"() {
+        when:
+        dependency "project(':java-lib')"
+        dependency "project(':android-lib')"
+        dependency "'org.gradle:ext-java-lib:1.0'"
+        dependency "'org.gradle:ext-android-lib:1.0'"
+
+        then:
+        manifest '/transformed/android-lib.aar/AndroidManifest.xml',
+            '/transformed/ext-android-lib-1.0.aar/AndroidManifest.xml'
+    }
+
     def dependency(String notation) {
         buildFile << """
     project(':android-app') {
@@ -227,6 +291,18 @@ import java.nio.file.Paths
 
         for (String classpathElement : classpathElements) {
             outputContains(classpathElement)
+        }
+    }
+
+    void manifest(String... manifests) {
+        assert succeeds('printManifests')
+
+        if (manifests.length == 0) {
+            outputContains('no manifest found')
+        }
+
+        for (String manifest : manifests) {
+            outputContains(manifest)
         }
     }
 
