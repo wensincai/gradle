@@ -77,11 +77,8 @@ import java.nio.file.Paths
         File output
 
         void transform(File input) {
-            if (input.name.endsWith('.aar')) {
-                outputIsClassesDirOfExtractedArchive(input)
-            } else {
-                outputIsExactCopy(input)
-            }
+            assert input.name.endsWith('.aar')
+            outputIsClassesDirOfExtractedArchive(input)
         }
 
         private void outputIsClassesDirOfExtractedArchive(def input) {
@@ -95,15 +92,6 @@ import java.nio.file.Paths
 
             output = new File(explodedAar, "classes")
             assert output.exists()
-        }
-
-        // TODO:DAZ We shouldn't need to copy: should only tranform AAR file types.
-        private void outputIsExactCopy(def input) {
-            output = new File(outputDirectory, input.name)
-
-            if (!output.exists()) {
-                Files.copy(input.toPath(), output.toPath())
-            }
         }
     }
 
