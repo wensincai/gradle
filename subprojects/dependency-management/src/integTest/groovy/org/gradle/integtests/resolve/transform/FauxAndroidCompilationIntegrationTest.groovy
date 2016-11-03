@@ -136,12 +136,50 @@ import java.nio.file.Paths
         classpath '/java-lib/build/libs/java-lib.jar'
     }
 
+    def "local java libraries can expose classes directory directly as classpath artifact"() {
+        when:
+        dependency "project(':java-lib')"
+
+        and:
+        buildFile << """
+    project(':java-lib') {
+        artifacts {
+            runtime(compileJava.destinationDir) {
+                type 'classpath'
+            }
+        }
+    }
+"""
+
+        then:
+        classpath '/java-lib/build/classes/main'
+    }
+
     def "compile classpath includes classes dir from local android libraries"() {
         when:
         dependency "project(':android-lib')"
 
         then:
         classpath '/transformed/android-lib.aar/classes'
+    }
+
+    def "local android library can expose classes directory directly as classpath artifact"() {
+        when:
+        dependency "project(':android-lib')"
+
+        and:
+        buildFile << """
+    project(':android-lib') {
+        artifacts {
+            compile(file('classes')) {
+                type 'classpath'
+            }
+        }
+    }
+"""
+
+        then:
+        classpath '/android-lib/classes'
     }
 
     def "compile classpath includes jars from published java modules"() {

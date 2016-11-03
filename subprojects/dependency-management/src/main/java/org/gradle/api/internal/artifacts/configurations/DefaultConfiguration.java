@@ -757,18 +757,29 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         public Set<File> getFiles() {
             Set<ResolvedArtifact> artifacts = getArtifacts();
             Set<File> artifactFiles = Sets.newHashSet();
+
+            // First attempt to locate artifacts with the correct type
             for (ResolvedArtifact artifact : artifacts) {
                 if (artifact.getType().equals(type)) {
                     artifactFiles.add(artifact.getFile());
-                } else {
-                    DependencyTransform transform =  getResolutionStrategy().getTransform(artifact.getType(), type);
-                    if (transform != null) {
-                        if (transform.getOutputDirectory() != null) {
-                            transform.getOutputDirectory().mkdirs();
-                        }
-                        transform.transform(artifact.getFile());
-                        artifactFiles.add(transform.getOutput());
+                }
+            }
+
+            // If any found, don't transform other artifacts.
+            if (artifactFiles.size() > 0) {
+                return artifactFiles;
+            }
+
+
+            for (ResolvedArtifact artifact : artifacts) {
+                // Attempt to transform each artifact
+                DependencyTransform transform =  getResolutionStrategy().getTransform(artifact.getType(), type);
+                if (transform != null) {
+                    if (transform.getOutputDirectory() != null) {
+                        transform.getOutputDirectory().mkdirs();
                     }
+                    transform.transform(artifact.getFile());
+                    artifactFiles.add(transform.getOutput());
                 }
             }
             return artifactFiles;
