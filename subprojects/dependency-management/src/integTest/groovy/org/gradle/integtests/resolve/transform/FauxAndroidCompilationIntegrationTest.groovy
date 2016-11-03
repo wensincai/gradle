@@ -111,6 +111,12 @@ import java.nio.file.Paths
         file('android-lib/aar-content/classes/foo.txt') << "something"
         file('android-lib/aar-content/classes/bar/baz.txt') << "something"
         file('android-app').mkdirs()
+
+        def module = mavenRepo.module("org.gradle", "ext-android-lib").hasType('aar').publish()
+        module.artifactFile.delete()
+        file("android-lib/aar-content").zipTo(module.artifactFile)
+
+        mavenRepo.module("org.gradle", "ext-java-lib").publish()
     }
 
     def "compile classpath directly references jars from local java libraries"() {
@@ -131,7 +137,6 @@ import java.nio.file.Paths
 
     def "compile classpath includes jars from published java modules"() {
         when:
-        mavenRepo.module("org.gradle", "ext-java-lib").publish()
         dependency "'org.gradle:ext-java-lib:1.0'"
 
         then:
@@ -140,14 +145,24 @@ import java.nio.file.Paths
 
     def "compile classpath includes classes dir from published android modules"() {
         when:
-        def module = mavenRepo.module("org.gradle", "ext-android-lib").hasType('aar').publish()
-        assert module.artifactFile.delete()
-        file("android-lib/aar-content").zipTo(module.artifactFile)
-
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
         classpath '/transformed/ext-android-lib-1.0.aar/classes'
+    }
+
+    def "compile dependencies include a combination of aars and jars"() {
+        when:
+        dependency "project(':java-lib')"
+        dependency "project(':android-lib')"
+        dependency "'org.gradle:ext-java-lib:1.0'"
+        dependency "'org.gradle:ext-android-lib:1.0'"
+
+        then:
+        classpath '/java-lib/build/libs/java-lib.jar',
+            '/transformed/android-lib.aar/classes',
+            '/maven-repo/org/gradle/ext-java-lib/1.0/ext-java-lib-1.0.jar',
+            '/transformed/ext-android-lib-1.0.aar/classes'
     }
 
     def dependency(String notation) {
