@@ -30,6 +30,7 @@ public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyRes
         buildFile << """
 import java.nio.file.Files
 import java.nio.file.Paths
+import org.gradle.api.artifacts.transform.*
 
     project(':java-lib') {
         apply plugin: 'java'
@@ -60,19 +61,13 @@ import java.nio.file.Paths
         }
 
         configurations.compile.resolutionStrategy {
-            // Extract the classes.jar from an Aar.
-            registerTransform('aar', 'classpath', AarClassesExtractor)  {
+            // Extract the manifest and classes.jar from an Aar.
+            registerTransform('aar', AarExtractor)  {
                 outputDirectory = project.file("transformed")
                 antBuilder = project.ant
             }
             // Jar is a classpath element in it's own right
-            registerTransform('jar', 'classpath', IdentityTransform) {}
-
-            // Extract the manifest from an Aar.
-            registerTransform('aar', 'android-manifest', AarManifestExtractor)  {
-                outputDirectory = project.file("transformed")
-                antBuilder = project.ant
-            }
+            registerTransform('jar', JarClasspathTransform) {}
         }
 
         def compileClasspath = configurations.compile.withType('classpath')
@@ -96,41 +91,39 @@ import java.nio.file.Paths
         }
     }
 
-    abstract class AarExtractor extends org.gradle.api.artifacts.transform.DependencyTransform {
+    class AarExtractor extends DependencyTransform {
         def antBuilder
-        File output
+        private File explodedAar
+
+        @TransformOutput(type = 'classpath')
+        File getClassesJar() {
+            new File(explodedAar, "classes.jar")
+        }
+
+        @TransformOutput(type = 'android-manifest')
+        File getManifest() {
+            new File(explodedAar, "AndroidManifest.xml")
+        }
 
         void transform(File input) {
             assert input.name.endsWith('.aar')
 
-            def explodedAar = new File(outputDirectory, input.name)
+            explodedAar = new File(outputDirectory, input.name)
             if (!explodedAar.exists()) {
                 antBuilder.unzip(src:  input,
                                  dest: explodedAar,
                                  overwrite: "false")
             }
-
-            output = new File(explodedAar, getOutputPathInArchive())
-            assert output.exists()
-        }
-
-        protected abstract String getOutputPathInArchive();
-    }
-
-    class AarClassesExtractor extends AarExtractor {
-        protected String getOutputPathInArchive() {
-            return "classes.jar"
         }
     }
 
-    class AarManifestExtractor extends AarExtractor {
-        protected String getOutputPathInArchive() {
-            return "AndroidManifest.xml"
-        }
-    }
+    class JarClasspathTransform extends DependencyTransform {
+        private File output
 
-    class IdentityTransform extends org.gradle.api.artifacts.transform.DependencyTransform {
-        File output
+        @TransformOutput(type = 'classpath')
+        File getOutput() {
+            output
+        }
 
         void transform(File input) {
             output = input

@@ -33,6 +33,4 @@ public abstract class DependencyTransform {
     }
 
     public abstract void transform(File in);
-
-    public abstract File getOutput();
 }

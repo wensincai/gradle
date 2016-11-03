@@ -16,8 +16,8 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.resolutionstrategy;
 
-import com.google.common.collect.Lists;
 import org.gradle.api.Action;
+import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.ComponentSelection;
 import org.gradle.api.artifacts.ComponentSelectionRules;
 import org.gradle.api.artifacts.DependencyResolveDetails;
@@ -27,6 +27,7 @@ import org.gradle.api.artifacts.ModuleVersionSelector;
 import org.gradle.api.artifacts.ResolutionStrategy;
 import org.gradle.api.artifacts.cache.ResolutionRules;
 import org.gradle.api.artifacts.transform.DependencyTransform;
+import org.gradle.api.artifacts.transform.internal.DependencyTransforms;
 import org.gradle.api.internal.artifacts.ComponentSelectionRulesInternal;
 import org.gradle.api.internal.artifacts.component.ComponentIdentifierFactory;
 import org.gradle.api.internal.artifacts.configurations.ConflictResolution;
@@ -37,15 +38,14 @@ import org.gradle.api.internal.artifacts.ivyservice.dependencysubstitution.Defau
 import org.gradle.api.internal.artifacts.ivyservice.dependencysubstitution.DependencySubstitutionRules;
 import org.gradle.api.internal.artifacts.ivyservice.dependencysubstitution.DependencySubstitutionsInternal;
 import org.gradle.internal.Actions;
-import org.gradle.internal.reflect.DirectInstantiator;
 import org.gradle.internal.rules.SpecRuleAction;
 import org.gradle.internal.typeconversion.NormalizedTimeUnit;
 import org.gradle.internal.typeconversion.TimeUnitsParser;
 
+import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -60,8 +60,8 @@ public class DefaultResolutionStrategy implements ResolutionStrategyInternal {
     private final DefaultCachePolicy cachePolicy;
     private final DependencySubstitutionsInternal dependencySubstitutions;
     private final DependencySubstitutionRules globalDependencySubstitutionRules;
+    private final DependencyTransforms transforms = new DependencyTransforms();
     private MutationValidator mutationValidator = MutationValidator.IGNORE;
-    private final List<DependencyTransformRegistration> transforms = Lists.newArrayList();
 
     private boolean assumeFluidDependencies;
     private static final String ASSUME_FLUID_DEPENDENCIES = "org.gradle.resolution.assumeFluidDependencies";
@@ -88,21 +88,13 @@ public class DefaultResolutionStrategy implements ResolutionStrategyInternal {
     }
 
     @Override
-    public DependencyTransform getTransform(String from, String to) {
-        for (DependencyTransformRegistration transformReg : transforms) {
-            if (transformReg.from.equals(from) && transformReg.to.equals(to)) {
-                DependencyTransform transform = DirectInstantiator.INSTANCE.newInstance(transformReg.type);
-                transformReg.config.execute(transform);
-                return transform;
-            }
-        }
-        return null;
+    public Transformer<File, File> getTransform(String from, String to) {
+        return transforms.getTransform(from, to);
     }
 
     @Override
-    public void registerTransform(String from, String to, Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
-        DependencyTransformRegistration registration = new DependencyTransformRegistration(from, to, type, config);
-        transforms.add(registration);
+    public void registerTransform(String from, Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
+        transforms.registerTransform(from, type, config);
     }
 
     public Set<ModuleVersionSelector> getForcedModules() {
@@ -220,19 +212,5 @@ public class DefaultResolutionStrategy implements ResolutionStrategyInternal {
             out.getComponentSelection().addRule(ruleAction);
         }
         return out;
-    }
-
-    private final class DependencyTransformRegistration {
-        final String from;
-        final String to;
-        final Class<? extends DependencyTransform> type;
-        final Action<? super DependencyTransform> config;
-
-        public DependencyTransformRegistration(String from, String to, Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
-            this.from = from;
-            this.to = to;
-            this.type = type;
-            this.config = config;
-        }
     }
 }

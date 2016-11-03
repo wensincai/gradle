@@ -23,6 +23,7 @@ class TransformedConfigurationIntegrationTest extends AbstractIntegrationSpec {
     def "Can resolve transformed configuration"() {
         when:
         buildFile << """
+import org.gradle.api.artifacts.transform.*
             buildscript {
                 repositories {
                     mavenCentral()
@@ -40,7 +41,7 @@ class TransformedConfigurationIntegrationTest extends AbstractIntegrationSpec {
                 compile 'com.google.guava:guava:19.0'
             }
             configurations.compile.resolutionStrategy {
-                registerTransform('jar', 'md5', FileHasher) {
+                registerTransform('jar', FileHasher) {
                     outputDirectory = project.file("\${buildDir}/transformed")
                 }
             }
@@ -49,8 +50,13 @@ class TransformedConfigurationIntegrationTest extends AbstractIntegrationSpec {
                 into "\${buildDir}/libs"
             }
 
-            class FileHasher extends org.gradle.api.artifacts.transform.DependencyTransform {
-                File output
+            class FileHasher extends DependencyTransform {
+                private File output
+
+                @TransformOutput(type = 'md5')
+                File getOutput() {
+                    return output
+                }
 
                 void transform(File input) {
                     output = new File(outputDirectory, input.name + ".md5")
