@@ -14,25 +14,8 @@
  * limitations under the License.
  */
 
-package org.gradle.api.artifacts.transform;
-
-import java.io.File;
-
 /**
- * Base class for dependency transformations.
+ * Classes that perform dependency transformations.
  */
-public abstract class DependencyTransform {
-    private File outputDirectory;
-
-    public File getOutputDirectory() {
-        return outputDirectory;
-    }
-
-    public void setOutputDirectory(File outputDirectory) {
-        this.outputDirectory = outputDirectory;
-    }
-
-    public abstract void transform(File in);
-
-    public abstract File getOutput();
-}
+@org.gradle.api.Incubating
+package org.gradle.api.artifacts.transform;
