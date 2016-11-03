@@ -59,7 +59,7 @@ import java.nio.file.Paths
             maven { url '${mavenRepo.uri}' }
         }
 
-        def compileClasspath = configurations.compile.transform(AarClassesExtractor) {
+        def compileClasspath = configurations.compile.transform('aar', AarClassesExtractor) {
             outputDirectory = project.file("transformed")
             antBuilder = project.ant
         }
@@ -113,12 +113,12 @@ import java.nio.file.Paths
         file('android-app').mkdirs()
     }
 
-    def "compile classpath includes jars from local java libraries"() {
+    def "compile classpath directly references jars from local java libraries"() {
         when:
         dependency "project(':java-lib')"
 
         then:
-        classpath 'transformed/java-lib.jar'
+        classpath '/java-lib/build/libs/java-lib.jar'
     }
 
     def "compile classpath includes classes dir from local android libraries"() {
@@ -126,7 +126,7 @@ import java.nio.file.Paths
         dependency "project(':android-lib')"
 
         then:
-        classpath 'transformed/android-lib.aar/classes'
+        classpath '/transformed/android-lib.aar/classes'
     }
 
     def "compile classpath includes jars from published java modules"() {
@@ -135,7 +135,7 @@ import java.nio.file.Paths
         dependency "'org.gradle:ext-java-lib:1.0'"
 
         then:
-        classpath 'transformed/ext-java-lib-1.0.jar'
+        classpath '/maven-repo/org/gradle/ext-java-lib/1.0/ext-java-lib-1.0.jar'
     }
 
     def "compile classpath includes classes dir from published android modules"() {
@@ -147,7 +147,7 @@ import java.nio.file.Paths
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
-        classpath 'transformed/ext-android-lib-1.0.aar/classes'
+        classpath '/transformed/ext-android-lib-1.0.aar/classes'
     }
 
     def dependency(String notation) {

@@ -40,7 +40,7 @@ class TransformedConfigurationIntegrationTest extends AbstractIntegrationSpec {
                 compile 'com.google.guava:guava:19.0'
             }
             task resolve(type: Copy) {
-                from configurations.compile.transform(FileHasher) {
+                from configurations.compile.transform('jar', FileHasher) {
                     outputDirectory = project.file("\${buildDir}/transformed")
                 }
                 into "\${buildDir}/libs"
