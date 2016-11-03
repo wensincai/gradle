@@ -84,5 +84,5 @@ public interface ResolutionStrategyInternal extends ResolutionStrategy {
 
     Transformer<File, File> getTransform(String from, String to);
 
-    void registerTransform(String from, Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config);
+    void registerTransform(Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config);
 }

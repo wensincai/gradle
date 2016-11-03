@@ -62,12 +62,12 @@ import org.gradle.api.artifacts.transform.*
 
         configurations.compile.resolutionStrategy {
             // Extract the manifest and classes.jar from an Aar.
-            registerTransform('aar', AarExtractor)  {
+            registerTransform(AarExtractor)  {
                 outputDirectory = project.file("transformed")
                 antBuilder = project.ant
             }
             // Jar is a classpath element in it's own right
-            registerTransform('jar', JarClasspathTransform) {}
+            registerTransform(JarClasspathTransform) {}
         }
 
         def compileClasspath = configurations.compile.withType('classpath')
@@ -91,6 +91,7 @@ import org.gradle.api.artifacts.transform.*
         }
     }
 
+    @TransformInput(type = 'aar')
     class AarExtractor extends DependencyTransform {
         def antBuilder
         private File explodedAar
@@ -117,6 +118,7 @@ import org.gradle.api.artifacts.transform.*
         }
     }
 
+    @TransformInput(type = 'jar')
     class JarClasspathTransform extends DependencyTransform {
         private File output
 

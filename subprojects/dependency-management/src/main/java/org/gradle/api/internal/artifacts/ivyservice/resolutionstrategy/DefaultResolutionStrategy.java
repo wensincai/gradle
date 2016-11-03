@@ -93,8 +93,8 @@ public class DefaultResolutionStrategy implements ResolutionStrategyInternal {
     }
 
     @Override
-    public void registerTransform(String from, Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
-        transforms.registerTransform(from, type, config);
+    public void registerTransform(Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
+        transforms.registerTransform(type, config);
     }
 
     public Set<ModuleVersionSelector> getForcedModules() {

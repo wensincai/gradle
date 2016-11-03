@@ -41,7 +41,7 @@ import org.gradle.api.artifacts.transform.*
                 compile 'com.google.guava:guava:19.0'
             }
             configurations.compile.resolutionStrategy {
-                registerTransform('jar', FileHasher) {
+                registerTransform(FileHasher) {
                     outputDirectory = project.file("\${buildDir}/transformed")
                 }
             }
@@ -50,6 +50,7 @@ import org.gradle.api.artifacts.transform.*
                 into "\${buildDir}/libs"
             }
 
+            @TransformInput(type = 'jar')
             class FileHasher extends DependencyTransform {
                 private File output
 

@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import org.gradle.api.Action;
 import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.transform.DependencyTransform;
+import org.gradle.api.artifacts.transform.TransformInput;
 import org.gradle.api.artifacts.transform.TransformOutput;
 import org.gradle.internal.reflect.DirectInstantiator;
 import org.gradle.internal.reflect.JavaMethod;
@@ -41,7 +42,14 @@ public class DependencyTransforms {
         return null;
     }
 
-    public void registerTransform(String from, Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
+    public void registerTransform(Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
+        // TODO Declare the input and output types statically on the type signatures, rather than via annotations?
+        TransformInput transformInput = type.getAnnotation(TransformInput.class);
+        if (transformInput == null) {
+            throw new RuntimeException("DependencyTransform must statically declare input type using `@TransformInput`");
+        }
+        String from = transformInput.type();
+
         for (Class current = type; current != null; current = current.getSuperclass()) {
             for (Method method : current.getDeclaredMethods()) {
                 TransformOutput transformOutput = method.getAnnotation(TransformOutput.class);
