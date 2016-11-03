@@ -43,7 +43,7 @@ import java.nio.file.Paths
         configurations['default'].extendsFrom(configurations['compile'])
 
         task aar(type: Zip) {
-            from file('aar-content')
+            from file('aar-image')
             destinationDir = project.buildDir
             extension = 'aar'
         }
@@ -60,12 +60,12 @@ import java.nio.file.Paths
         }
 
         configurations.compile.resolutionStrategy {
-            // Extract the classes directory from an Aar.
+            // Extract the classes.jar from an Aar.
             registerTransform('aar', 'classpath', AarClassesExtractor)  {
                 outputDirectory = project.file("transformed")
                 antBuilder = project.ant
             }
-            // Jar is a classpath element
+            // Jar is a classpath element in it's own right
             registerTransform('jar', 'classpath', IdentityTransform) {}
         }
 
@@ -97,7 +97,7 @@ import java.nio.file.Paths
                                  overwrite: "false")
             }
 
-            output = new File(explodedAar, "classes")
+            output = new File(explodedAar, "classes.jar")
             assert output.exists()
         }
     }
@@ -111,13 +111,19 @@ import java.nio.file.Paths
     }
 
 """
-        file('android-lib/aar-content/classes/foo.txt') << "something"
-        file('android-lib/aar-content/classes/bar/baz.txt') << "something"
-        file('android-app').mkdirs()
+
+        def aarImage = file('android-lib/aar-image')
+        aarImage.file('AndroidManifest.xml') << "<AndroidManifest/>"
+        file('android-lib/classes/foo.txt') << "something"
+        file('android-lib/classes/bar/baz.txt') << "something"
+        file('android-lib/classes/bar/baz.txt') << "something"
+        file('android-lib/classes').zipTo(aarImage.file('classes.jar'))
 
         def module = mavenRepo.module("org.gradle", "ext-android-lib").hasType('aar').publish()
         module.artifactFile.delete()
-        file("android-lib/aar-content").zipTo(module.artifactFile)
+        aarImage.zipTo(module.artifactFile)
+
+        file('android-app').mkdirs()
 
         mavenRepo.module("org.gradle", "ext-java-lib").publish()
     }
