@@ -14,8 +14,20 @@
  * limitations under the License.
  */
 
-package org.gradle.launcher.daemon.server.health.memory;
+package org.gradle.process.internal.daemon;
 
-interface AvailableMemory {
-    public long get() throws UnsupportedOperationException;
+/**
+ * Memory resource holder.
+ */
+public interface MemoryResourceHolder {
+
+    /**
+     * Attempt to release system memory.
+     *
+     * @param memoryAmountBytes The amount of system memory to release.
+     * @return The amount of released system memory
+     * @throws IllegalArgumentException if memoryAmountBytes is negative
+     */
+    long attemptToRelease(long memoryAmountBytes) throws IllegalArgumentException;
+
 }

@@ -22,11 +22,18 @@ import org.gradle.internal.operations.BuildOperationWorkerRegistry;
 import org.gradle.internal.service.ServiceRegistration;
 import org.gradle.internal.service.scopes.PluginServiceRegistry;
 import org.gradle.process.daemon.WorkerDaemonService;
+import org.gradle.process.internal.daemon.DefaultMemoryResourceManager;
 import org.gradle.process.internal.daemon.DefaultWorkerDaemonService;
+import org.gradle.process.internal.daemon.MemoryResourceManager;
 import org.gradle.process.internal.daemon.WorkerDaemonClientsManager;
+import org.gradle.process.internal.daemon.WorkerDaemonExpiration;
 import org.gradle.process.internal.daemon.WorkerDaemonManager;
 import org.gradle.process.internal.daemon.WorkerDaemonStarter;
+import org.gradle.process.internal.health.memory.MemoryInfo;
 import org.gradle.process.internal.worker.WorkerProcessFactory;
+
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class WorkersServices implements PluginServiceRegistry {
     @Override
@@ -51,8 +58,24 @@ public class WorkersServices implements PluginServiceRegistry {
     }
 
     private static class BuildSessionScopeServices {
-        WorkerDaemonManager createWorkerDaemonManager(BuildOperationWorkerRegistry buildOperationWorkerRegistry, WorkerProcessFactory workerFactory, StartParameter startParameter) {
-            return new WorkerDaemonManager(new WorkerDaemonClientsManager(new WorkerDaemonStarter(buildOperationWorkerRegistry, workerFactory, startParameter)));
+        ScheduledExecutorService createScheduledExecutorService() {
+            return Executors.newScheduledThreadPool(1);
+        }
+
+        MemoryResourceManager createMemoryResourceManager(ScheduledExecutorService scheduledExecutorService) {
+            return new DefaultMemoryResourceManager(scheduledExecutorService, new MemoryInfo(), 0.05);
+        }
+
+        WorkerDaemonClientsManager createWorkerDaemonClientsManager(BuildOperationWorkerRegistry buildOperationWorkerRegistry, WorkerProcessFactory workerFactory, StartParameter startParameter) {
+            return new WorkerDaemonClientsManager(new WorkerDaemonStarter(buildOperationWorkerRegistry, workerFactory, startParameter));
+        }
+
+        WorkerDaemonExpiration createWorkerDaemonExpiration(WorkerDaemonClientsManager workerDaemonClientsManager) {
+            return new WorkerDaemonExpiration(workerDaemonClientsManager, new MemoryInfo());
+        }
+
+        WorkerDaemonManager createWorkerDaemonManager(WorkerDaemonClientsManager workerDaemonClientsManager) {
+            return new WorkerDaemonManager(workerDaemonClientsManager);
         }
 
         WorkerDaemonService createWorkerDaemonService(WorkerDaemonManager workerDaemonManager, FileResolver fileResolver) {

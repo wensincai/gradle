@@ -65,7 +65,7 @@ public class DefaultTestExecuter implements TestExecuter {
         final Factory<TestClassProcessor> forkingProcessorFactory = new Factory<TestClassProcessor>() {
             public TestClassProcessor create() {
                 return new ForkingTestClassProcessor(workerFactory, testInstanceFactory, testTask,
-                    classpath, testFramework.getWorkerConfigurationAction(), moduleRegistry, currentOperation);
+                    testTask.getClasspath(), testFramework.getWorkerConfigurationAction(), moduleRegistry, currentOperation);
             }
         };
         Factory<TestClassProcessor> reforkingProcessorFactory = new Factory<TestClassProcessor>() {

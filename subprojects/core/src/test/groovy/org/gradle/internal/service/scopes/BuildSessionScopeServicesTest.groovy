@@ -21,7 +21,6 @@ import org.gradle.api.internal.ClassPathRegistry
 import org.gradle.api.internal.classpath.DefaultModuleRegistry
 import org.gradle.api.internal.classpath.ModuleRegistry
 import org.gradle.api.internal.file.FileResolver
-import org.gradle.api.internal.file.TemporaryFileProvider
 import org.gradle.cache.CacheRepository
 import org.gradle.cache.internal.CacheFactory
 import org.gradle.cache.internal.DefaultCacheRepository
@@ -30,16 +29,11 @@ import org.gradle.deployment.internal.DeploymentRegistry
 import org.gradle.internal.classpath.ClassPath
 import org.gradle.internal.concurrent.ExecutorFactory
 import org.gradle.internal.installation.CurrentGradleInstallation
-import org.gradle.internal.jvm.inspection.JvmVersionDetector
 import org.gradle.internal.operations.BuildOperationProcessor
 import org.gradle.internal.operations.BuildOperationWorkerRegistry
 import org.gradle.internal.operations.DefaultBuildOperationProcessor
 import org.gradle.internal.operations.DefaultBuildOperationWorkerRegistry
-import org.gradle.internal.remote.MessagingServer
 import org.gradle.internal.service.ServiceRegistry
-import org.gradle.process.internal.JavaExecHandleFactory
-import org.gradle.process.internal.worker.DefaultWorkerProcessFactory
-import org.gradle.process.internal.worker.WorkerProcessFactory
 import org.gradle.process.internal.worker.child.WorkerProcessClassPathProvider
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
@@ -85,18 +79,6 @@ class BuildSessionScopeServicesTest extends Specification {
         expect:
         registry.get(BuildOperationProcessor) instanceof DefaultBuildOperationProcessor
         registry.get(BuildOperationProcessor) == registry.get(BuildOperationProcessor)
-    }
-
-    def "provides a WorkerProcessBuilder factory"() {
-        setup:
-        expectParentServiceLocated(MessagingServer)
-        expectParentServiceLocated(TemporaryFileProvider)
-        expectParentServiceLocated(JavaExecHandleFactory)
-        expectParentServiceLocated(JvmVersionDetector)
-
-        expect:
-        registry.get(WorkerProcessFactory) instanceof DefaultWorkerProcessFactory
-        registry.get(WorkerProcessFactory) == registry.get(WorkerProcessFactory)
     }
 
     def "provides a ClassPathRegistry"() {
