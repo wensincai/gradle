@@ -43,7 +43,10 @@ import org.gradle.api.artifacts.transform.*
         }
         configurations['default'].extendsFrom(configurations['compile'])
 
+        task classes
+
         task aar(type: Zip) {
+            dependsOn classes
             from file('aar-image')
             destinationDir = project.buildDir
             extension = 'aar'
@@ -156,6 +159,9 @@ import org.gradle.api.artifacts.transform.*
 
         then:
         classpath '/java-lib/build/libs/java-lib.jar'
+
+        and:
+        executed ':java-lib:jar'
     }
 
     def "local java libraries can expose classes directory directly as classpath artifact"() {
@@ -175,6 +181,12 @@ import org.gradle.api.artifacts.transform.*
 
         then:
         classpath '/java-lib/build/classes/main'
+
+        and:
+        executed ":java-lib:classes"
+
+        // TODO We shouldn't be building the jar in this case, but this will require a much deeper change
+//        notExecuted ":java-lib:jar"
     }
 
     def "compile classpath includes classes dir from local android libraries"() {
@@ -183,6 +195,9 @@ import org.gradle.api.artifacts.transform.*
 
         then:
         classpath '/transformed/android-lib.aar/classes.jar'
+
+        and:
+        executed ":android-lib:aar"
     }
 
     def "local android library can expose classes directory directly as classpath artifact"() {
@@ -202,6 +217,12 @@ import org.gradle.api.artifacts.transform.*
 
         then:
         classpath '/android-lib/classes'
+
+        and:
+        executed ":android-lib:classes"
+
+        // TODO We shouldn't be building the aar in this case, but this will require a much deeper change
+//        notExecuted ":android-lib:aar"
     }
 
     def "compile classpath includes jars from published java modules"() {
