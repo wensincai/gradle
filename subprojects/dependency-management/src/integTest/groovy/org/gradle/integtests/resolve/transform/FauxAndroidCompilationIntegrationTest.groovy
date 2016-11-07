@@ -28,8 +28,6 @@ public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyRes
     include 'android-app'
 """
         buildFile << """
-import java.nio.file.Files
-import java.nio.file.Paths
 import org.gradle.api.artifacts.transform.*
 
     project(':java-lib') {
@@ -41,7 +39,7 @@ import org.gradle.api.artifacts.transform.*
         configurations {
             compile
         }
-        configurations['default'].extendsFrom(configurations['compile'])
+        configurations.default.extendsFrom(configurations.compile)
 
         task classes
 
@@ -57,7 +55,12 @@ import org.gradle.api.artifacts.transform.*
         }
     }
     project(':android-app') {
-        apply plugin: 'java'
+        apply plugin: 'base'
+
+        configurations {
+            compile
+        }
+        configurations.default.extendsFrom(configurations.compile)
 
         repositories {
             maven { url '${mavenRepo.uri}' }
@@ -172,7 +175,7 @@ import org.gradle.api.artifacts.transform.*
         buildFile << """
     project(':java-lib') {
         artifacts {
-            runtime(compileJava.destinationDir) {
+            compile(compileJava.destinationDir) {
                 type 'classpath'
             }
         }
