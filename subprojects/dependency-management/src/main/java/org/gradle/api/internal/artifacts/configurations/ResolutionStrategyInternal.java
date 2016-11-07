@@ -20,7 +20,6 @@ import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.DependencySubstitution;
 import org.gradle.api.artifacts.ResolutionStrategy;
 import org.gradle.api.artifacts.cache.ResolutionRules;
-import org.gradle.api.artifacts.transform.DependencyTransform;
 import org.gradle.api.internal.artifacts.ComponentSelectionRulesInternal;
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy;
 import org.gradle.api.internal.artifacts.ivyservice.dependencysubstitution.DependencySubstitutionsInternal;
@@ -83,6 +82,4 @@ public interface ResolutionStrategyInternal extends ResolutionStrategy {
     void setMutationValidator(MutationValidator action);
 
     Transformer<File, File> getTransform(String from, String to);
-
-    void registerTransform(Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config);
 }

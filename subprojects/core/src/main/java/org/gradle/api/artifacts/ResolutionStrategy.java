@@ -18,6 +18,7 @@ package org.gradle.api.artifacts;
 
 import org.gradle.api.Action;
 import org.gradle.api.Incubating;
+import org.gradle.api.artifacts.transform.DependencyTransform;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -285,4 +286,7 @@ public interface ResolutionStrategy {
      */
     @Incubating
     ResolutionStrategy dependencySubstitution(Action<? super DependencySubstitutions> action);
+
+    @Incubating
+    void registerTransform(Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config);
 }
