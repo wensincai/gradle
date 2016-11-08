@@ -17,6 +17,11 @@
 package org.gradle.integtests.resolve.transform
 
 import org.gradle.integtests.fixtures.AbstractDependencyResolutionTest
+import org.hamcrest.CoreMatchers
+import org.hamcrest.core.StringContains
+
+import static org.gradle.util.TextUtil.normaliseLineSeparators
+import static org.junit.Assert.assertThat
 
 public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyResolutionTest {
 
@@ -41,7 +46,10 @@ import org.gradle.api.artifacts.transform.*
         }
         configurations.default.extendsFrom(configurations.compile)
 
-        task classes
+        task classes(type: Copy) {
+            from file('classes')
+            into new File(buildDir, 'classes')
+        }
 
         task aar(type: Zip) {
             dependsOn classes
@@ -57,8 +65,24 @@ import org.gradle.api.artifacts.transform.*
     project(':android-app') {
         apply plugin: 'base'
 
+        //TODO inherit registered transforms?
         configurations {
             compile
+            compileClasspath {
+                extendsFrom(configurations.compile)
+                format = 'classpath'
+            }
+            compileManifests {
+                extendsFrom(configurations.compile)
+                format = 'android-manifest'
+                resolutionStrategy {
+                    // Extract the manifest and classes.jar from an Aar.
+                    registerTransform(AarExtractor)  {
+                        outputDirectory = project.file("transformed")
+                        antBuilder = project.ant
+                    }
+                }
+            }
         }
         configurations.default.extendsFrom(configurations.compile)
 
@@ -66,31 +90,18 @@ import org.gradle.api.artifacts.transform.*
             maven { url '${mavenRepo.uri}' }
         }
 
-        configurations.compile.resolutionStrategy {
-            // Extract the manifest and classes.jar from an Aar.
-            registerTransform(AarExtractor)  {
-                outputDirectory = project.file("transformed")
-                antBuilder = project.ant
-            }
-            // Jar is a classpath element in it's own right
-            registerTransform(JarClasspathTransform) {}
-        }
-
-        def compileClasspath = configurations.compile.withType('classpath')
-        def compileManifests = configurations.compile.withType('android-manifest')
-
         task fakeCompile {
-            dependsOn compileClasspath
+            dependsOn configurations.compileClasspath
             doLast {
-                compileClasspath.each { println it.absolutePath - rootDir }
+                configurations.compileClasspath.incoming.artifacts.each { println it.file.absolutePath - rootDir }
             }
         }
 
         task printManifests {
-            dependsOn compileManifests
+            dependsOn configurations.compileManifests
             doLast {
-                compileManifests.each { println it.absolutePath - rootDir }
-                if (compileManifests.empty) {
+                configurations.compileManifests.incoming.artifacts.each { println it.file.absolutePath - rootDir }
+                if (configurations.compileManifests.incoming.artifacts.empty) {
                     println 'no manifest found'
                 }
             }
@@ -158,6 +169,7 @@ import org.gradle.api.artifacts.transform.*
 
     def "compile classpath directly references jars from local java libraries"() {
         when:
+        usesJarTransformForClasspath()
         dependency "project(':java-lib')"
 
         then:
@@ -194,6 +206,8 @@ import org.gradle.api.artifacts.transform.*
 
     def "compile classpath includes classes dir from local android libraries"() {
         when:
+        usesJarTransformForClasspath()
+        usesAarTransformForClasspath()
         dependency "project(':android-lib')"
 
         then:
@@ -228,8 +242,28 @@ import org.gradle.api.artifacts.transform.*
 //        notExecuted ":android-lib:aar"
     }
 
+    def "if local library exposes classes directly as classpath artifact, no classes.jar is exposed"() {
+        when:
+        dependency "project(':android-lib')"
+
+        and:
+        buildFile << """
+    project(':android-lib') {
+        artifacts {
+            compile(file('classes')) {
+                type 'classpath'
+            }
+        }
+    }
+"""
+
+        then:
+        notClasspath '/android-app/transformed/android-lib.aar/classes.jar'
+    }
+
     def "compile classpath includes jars from published java modules"() {
         when:
+        usesJarTransformForClasspath()
         dependency "'org.gradle:ext-java-lib:1.0'"
 
         then:
@@ -238,6 +272,7 @@ import org.gradle.api.artifacts.transform.*
 
     def "compile classpath includes classes jar from published android modules"() {
         when:
+        usesAarTransformForClasspath()
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
@@ -246,6 +281,8 @@ import org.gradle.api.artifacts.transform.*
 
     def "compile dependencies include a combination of aars and jars"() {
         when:
+        usesJarTransformForClasspath()
+        usesAarTransformForClasspath()
         dependency "project(':java-lib')"
         dependency "project(':android-lib')"
         dependency "'org.gradle:ext-java-lib:1.0'"
@@ -261,6 +298,7 @@ import org.gradle.api.artifacts.transform.*
 
     def "file dependencies are included in classpath"() {
         when:
+        usesJarTransformForClasspath()
         dependency("gradleApi()")
 
         then:
@@ -304,6 +342,25 @@ import org.gradle.api.artifacts.transform.*
             '/transformed/ext-android-lib-1.0.aar/AndroidManifest.xml'
     }
 
+    def usesAarTransformForClasspath() {
+        buildFile << """
+    project(':android-app') {
+        configurations.compileClasspath.resolutionStrategy.registerTransform(AarExtractor)  {
+            outputDirectory = project.file("transformed")
+            antBuilder = project.ant
+        }
+    }
+"""
+    }
+
+    def usesJarTransformForClasspath() {
+        buildFile << """
+    project(':android-app') {
+        configurations.compileClasspath.resolutionStrategy.registerTransform(JarClasspathTransform) {}
+    }
+"""
+    }
+
     def dependency(String notation) {
         buildFile << """
     project(':android-app') {
@@ -319,6 +376,15 @@ import org.gradle.api.artifacts.transform.*
 
         for (String classpathElement : classpathElements) {
             outputContains(classpathElement)
+        }
+    }
+
+    void notClasspath(String... classpathElements) {
+        assert succeeds('fakeCompile')
+
+        for (String classpathElement : classpathElements) {
+            assertThat("Substring found in build output", getOutput(), CoreMatchers.not(
+                StringContains.containsString(normaliseLineSeparators(classpathElement))));
         }
     }
 

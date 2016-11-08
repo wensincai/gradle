@@ -18,9 +18,7 @@ package org.gradle.api.internal.artifacts.configurations;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.io.Files;
 import groovy.lang.Closure;
-import org.apache.ivy.util.FileUtil;
 import org.gradle.api.Action;
 import org.gradle.api.Attribute;
 import org.gradle.api.AttributeContainer;
@@ -38,8 +36,8 @@ import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.artifacts.PublishArtifactSet;
 import org.gradle.api.artifacts.ResolutionStrategy;
 import org.gradle.api.artifacts.ResolvableDependencies;
-import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.artifacts.ResolvedConfiguration;
+import org.gradle.api.artifacts.component.ComponentArtifactIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.result.ResolutionResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
@@ -61,6 +59,7 @@ import org.gradle.api.internal.artifacts.component.ComponentIdentifierFactory;
 import org.gradle.api.internal.artifacts.dsl.dependencies.ProjectFinder;
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.ConfigurationComponentMetaDataBuilder;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.projectresult.ResolvedProjectConfiguration;
+import org.gradle.api.internal.artifacts.result.DefaultResolvedArtifactResult;
 import org.gradle.api.internal.file.AbstractFileCollection;
 import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.api.internal.file.FileCollectionInternal;
@@ -128,6 +127,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
     private boolean visible = true;
     private boolean transitive = true;
+    private String format;
     private Set<Configuration> extendsFrom = new LinkedHashSet<Configuration>();
     private String description;
     private ConfigurationsProvider configurationsProvider;
@@ -276,6 +276,17 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         return this;
     }
 
+    @Override
+    public String getFormat() {
+        return format;
+    }
+
+    @Override
+    public Configuration setFormat(String format) {
+        this.format = format;
+        return this;
+    }
+
     public String getDescription() {
         return description;
     }
@@ -357,10 +368,6 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
     public FileCollection fileCollection(Dependency... dependencies) {
         return new ConfigurationFileCollection(WrapUtil.toLinkedSet(dependencies));
-    }
-
-    public FileCollection withType(String type) {
-        return new TypedFileCollection(type);
     }
 
     public void markAsObserved(InternalState requestedState) {
@@ -743,65 +750,6 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             return doGetFiles(dependencySpec);
         }
     }
-    class TypedFileCollection extends AbstractFileCollection {
-        private final String type;
-        private Set<File> transformedFiles;
-
-        public TypedFileCollection(String type) {
-            this.type = type;
-        }
-
-        @Override
-        public TaskDependency getBuildDependencies() {
-            return DefaultConfiguration.this.getBuildDependencies();
-        }
-
-        @Override
-        public synchronized Set<File> getFiles() {
-            if (transformedFiles == null) {
-                transformedFiles = createTransformedFiles();
-            }
-            return transformedFiles;
-        }
-
-        private Set<File> createTransformedFiles() {
-            Set<ResolvedArtifactResult> artifacts = getIncoming().getArtifacts();
-            Set<File> artifactFiles = Sets.newHashSet();
-            getArtifacts();
-
-            // First attempt to locate artifacts with the correct type
-            for (ResolvedArtifactResult artifact : artifacts) {
-                if (artifact.getFormat().equals(type)) {
-                    artifactFiles.add(artifact.getFile());
-                }
-            }
-
-            // TODO:DAZ Parallel evaluation
-            for (ResolvedArtifactResult artifact : artifacts) {
-                // Attempt to transform each artifact
-                Transformer<File, File> transform = getResolutionStrategy().getTransform(artifact.getFormat(), type);
-                if (transform != null) {
-                    artifactFiles.add(transform.transform(artifact.getFile()));
-                }
-            }
-            return artifactFiles;
-        }
-
-        private Set<ResolvedArtifact> getArtifacts() {
-            synchronized (resolutionLock) {
-                ResolvedConfiguration resolvedConfiguration = getResolvedConfiguration();
-                if (getState() == State.RESOLVED_WITH_FAILURES) {
-                    resolvedConfiguration.rethrowFailure();
-                }
-                return resolvedConfiguration.getResolvedArtifacts();
-            }
-        }
-
-        @Override
-        public String getDisplayName() {
-            return DefaultConfiguration.this + " transformed artifacts";
-        }
-    }
 
     private void assertResolvingAllowed() {
         if (!canBeResolved) {
@@ -997,7 +945,39 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             cachedResolverResults.getResolvedConfiguration().rethrowFailure();
             Set<ResolvedArtifactResult> artifacts = new LinkedHashSet<ResolvedArtifactResult>();
             cachedResolverResults.getArtifactResults().collectArtifacts(artifacts);
-            return artifacts;
+            return filterAndTransform(artifacts);
+        }
+
+        private Set<ResolvedArtifactResult> filterAndTransform(Set<ResolvedArtifactResult> artifacts) {
+            if (format == null) {
+                // this is a configuration without specific format
+                return artifacts;
+            }
+
+            Set<ResolvedArtifactResult> filteredArtifacts = Sets.newHashSet();
+
+            // First attempt to locate artifacts with the correct format
+            for (ResolvedArtifactResult artifact : artifacts) {
+                if (artifact.getFormat().equals(format)) {
+                    filteredArtifacts.add(artifact);
+                }
+            }
+
+            // TODO: Parallel evaluation
+            for (ResolvedArtifactResult artifact : artifacts) {
+                // Attempt to transform each artifact
+                Transformer<File, File> transform = getResolutionStrategy().getTransform(artifact.getFormat(), format);
+
+                if (transform != null) {
+                    File transformedFile = transform.transform(artifact.getFile());
+
+                    ComponentArtifactIdentifier transformedIdentifier = artifact.getId(); //TODO does the identifier also need to be transformed?
+                    ResolvedArtifactResult transformedArtifact = new DefaultResolvedArtifactResult(
+                        transformedIdentifier, artifact.getType(), format, transformedFile);
+                    filteredArtifacts.add(transformedArtifact);
+                }
+            }
+            return filteredArtifacts;
         }
     }
 

@@ -167,6 +167,25 @@ public interface Configuration extends FileCollection {
     Configuration setTransitive(boolean t);
 
     /**
+     * Returns the format of this configuration.
+     *
+     * @return the format or null if not specified.
+     * @since 3.3
+     */
+    String getFormat();
+
+    /**
+     * Sets the format of the artifacts this configuration is handling. Can be null if this configuration does not deal with a
+     * specific format.
+     *
+     * @param format the format id
+     * @return this configuration
+     * @since 3.3
+     */
+    @Incubating
+    Configuration setFormat(String format);
+
+    /**
      * Returns the description for this configuration.
      *
      * @return the description. May be null.
@@ -253,11 +272,6 @@ public interface Configuration extends FileCollection {
      * @return The FileCollection with a subset of dependencies of this configuration.
      */
     FileCollection fileCollection(Dependency... dependencies);
-
-    /**
-     * Returns a type, transformed file collection for this configuration.
-     */
-    FileCollection withType(String type);
 
     /**
      * Resolves this configuration. This locates and downloads the files which make up this configuration, and returns
