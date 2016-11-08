@@ -18,7 +18,9 @@ package org.gradle.api.internal.artifacts.configurations;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.io.Files;
 import groovy.lang.Closure;
+import org.apache.ivy.util.FileUtil;
 import org.gradle.api.Action;
 import org.gradle.api.Attribute;
 import org.gradle.api.AttributeContainer;
@@ -41,7 +43,6 @@ import org.gradle.api.artifacts.ResolvedConfiguration;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.result.ResolutionResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
-import org.gradle.api.artifacts.transform.DependencyTransform;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ClosureBackedAction;
 import org.gradle.api.internal.CompositeDomainObjectSet;
@@ -764,25 +765,21 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         }
 
         private Set<File> createTransformedFiles() {
-            Set<ResolvedArtifact> artifacts = getArtifacts();
+            Set<ResolvedArtifactResult> artifacts = getIncoming().getArtifacts();
             Set<File> artifactFiles = Sets.newHashSet();
+            getArtifacts();
 
             // First attempt to locate artifacts with the correct type
-            for (ResolvedArtifact artifact : artifacts) {
-                if (artifact.getType().equals(type)) {
+            for (ResolvedArtifactResult artifact : artifacts) {
+                if (artifact.getFormat().equals(type)) {
                     artifactFiles.add(artifact.getFile());
                 }
             }
 
-            // If any found, don't transform other artifacts.
-            if (artifactFiles.size() > 0) {
-                return artifactFiles;
-            }
-
             // TODO:DAZ Parallel evaluation
-            for (ResolvedArtifact artifact : artifacts) {
+            for (ResolvedArtifactResult artifact : artifacts) {
                 // Attempt to transform each artifact
-                Transformer<File, File> transform =  getResolutionStrategy().getTransform(artifact.getType(), type);
+                Transformer<File, File> transform = getResolutionStrategy().getTransform(artifact.getFormat(), type);
                 if (transform != null) {
                     artifactFiles.add(transform.transform(artifact.getFile()));
                 }
