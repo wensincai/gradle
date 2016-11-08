@@ -258,6 +258,15 @@ import org.gradle.api.artifacts.transform.*
             '/transformed/ext-android-lib-1.0.aar/classes.jar'
     }
 
+
+    def "file dependencies are included in classpath"() {
+        when:
+        dependency("gradleApi()")
+
+        then:
+        classpath 'gradle-core'
+    }
+
     def "no manifest for local java library or published java module"() {
         when:
         dependency "project(':java-lib')"
