@@ -17,12 +17,25 @@
 package org.gradle.integtests.resolve.transform
 
 import org.gradle.integtests.fixtures.AbstractDependencyResolutionTest
-import org.hamcrest.CoreMatchers
-import org.hamcrest.core.StringContains
 
-import static org.gradle.util.TextUtil.normaliseLineSeparators
-import static org.junit.Assert.assertThat
-
+/**
+ * Overview of Configurations and 'formats' used in this scenario:
+ *
+ * Formats:
+ * - aar                aar file
+ * - jar                jar file
+ * - classes            classes folder
+ * - android-manifest   AndroidManifest.xml
+ * - classpath          everything that can be in a JVM classpath (jar files, class folders, files treated as resources)
+ *
+ * Configurations:
+ * - runtime                        behaves as runtime in Java plugin (e.g. packages classes in jars locally)
+ * - compileClassesAndResources     provides all artifacts in its raw format (e.g. class folders, not jars)
+ *
+ * - processClasspath               filters and transforms to 'classpath' format (e.g. keeps jars, but extracts 'classes.jar' from external AAR)
+ * - processClasses                 filters and transforms to 'classes' format (e.g. extracts jars to class folders)
+ * - processManifests               filters for 'android-manifest' format (no transformations taking place)
+ */
 public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyResolutionTest {
 
     def setup() {
@@ -37,85 +50,147 @@ import org.gradle.api.artifacts.transform.*
 
     project(':java-lib') {
         apply plugin: 'java'
+
+        configurations {
+            compileClassesAndResources
+
+        }
+        configurations.default.extendsFrom = [configurations.compileClassesAndResources] //setter removes extendFrom(runtime)
+
+        artifacts {
+            compileClassesAndResources(compileJava.destinationDir) {
+                type 'classes'
+                builtBy classes
+            }
+        }
     }
+
     project(':android-lib') {
         apply plugin: 'base'
 
         configurations {
-            compile
+            compileClassesAndResources
+            runtime //compiles JAR as in Java plugin
+            compileAAR
         }
-        configurations.default.extendsFrom(configurations.compile)
+        configurations.default.extendsFrom = [configurations.compileClassesAndResources]
 
         task classes(type: Copy) {
-            from file('classes')
-            into new File(buildDir, 'classes')
+            from file('classes/main')
+            into file('build/classes/main')
+        }
+
+        task jar(type: Zip) {
+            dependsOn classes
+            from classes.destinationDir
+            destinationDir = file('aar-image')
+            baseName = 'classes'
+            extension = 'jar'
         }
 
         task aar(type: Zip) {
-            dependsOn classes
+            dependsOn jar
             from file('aar-image')
-            destinationDir = project.buildDir
+            destinationDir = file('build')
             extension = 'aar'
         }
 
         artifacts {
-            compile aar
+            compileClassesAndResources(classes.destinationDir) {
+                type 'classes'
+                builtBy classes
+            }
+            compileClassesAndResources(file('aar-image/AndroidManifest.xml')) {
+                type 'android-manifest'
+            }
+
+            runtime jar
+
+            compileAAR aar
         }
     }
+
     project(':android-app') {
         apply plugin: 'base'
 
-        //TODO inherit registered transforms?
         configurations {
-            compile
-            compileClasspath {
-                extendsFrom(configurations.compile)
-                format = 'classpath'
-            }
-            compileManifests {
-                extendsFrom(configurations.compile)
-                format = 'android-manifest'
+            compileClassesAndResources
+            runtime
+
+            // configurations with filtering/transformation over 'compile'
+            processClasspath {
+                extendsFrom(compileClassesAndResources)
+                format = 'classpath' // 'classes' or 'jar'
                 resolutionStrategy {
-                    // Extract the manifest and classes.jar from an Aar.
                     registerTransform(AarExtractor)  {
                         outputDirectory = project.file("transformed")
-                        antBuilder = project.ant
+                        files = project
+                    }
+                    registerTransform(JarClasspathTransform) {
+                        outputDirectory = project.file("transformed")
+                        files = project
+                    }
+                    registerTransform(ClassesFolderClasspathTransform) { }
+                }
+            }
+            processClasses {
+                extendsFrom(compileClassesAndResources)
+                format = 'classes'
+                resolutionStrategy {
+                    registerTransform(AarExtractor)  {
+                        outputDirectory = project.file("transformed")
+                        files = project
+                    }
+                    registerTransform(JarClasspathTransform) {
+                        outputDirectory = project.file("transformed")
+                        files = project
+                    }
+                }
+            }
+            processManifests {
+                extendsFrom(compileClassesAndResources)
+                format = 'android-manifest'
+                resolutionStrategy {
+                    registerTransform(AarExtractor)  {
+                        outputDirectory = project.file("transformed")
+                        files = project
                     }
                 }
             }
         }
-        configurations.default.extendsFrom(configurations.compile)
 
         repositories {
             maven { url '${mavenRepo.uri}' }
         }
 
-        task fakeCompile {
-            dependsOn configurations.compileClasspath
+        task printArtifacts {
+            dependsOn configurations[configuration]
             doLast {
-                configurations.compileClasspath.incoming.artifacts.each { println it.file.absolutePath - rootDir }
-            }
-        }
-
-        task printManifests {
-            dependsOn configurations.compileManifests
-            doLast {
-                configurations.compileManifests.incoming.artifacts.each { println it.file.absolutePath - rootDir }
-                if (configurations.compileManifests.incoming.artifacts.empty) {
-                    println 'no manifest found'
-                }
+                configurations[configuration].incoming.artifacts.each { println it.file.absolutePath - rootDir }
             }
         }
     }
 
     @TransformInput(type = 'aar')
     class AarExtractor extends DependencyTransform {
-        def antBuilder
-        private File explodedAar
+        private Project files
 
-        @TransformOutput(type = 'classpath')
+        private File explodedAar
+        private File explodedJar
+
+        @TransformOutput(type = 'jar')
         File getClassesJar() {
             new File(explodedAar, "classes.jar")
+        }
+
+        @TransformOutput(type = 'classpath')
+        File getClasspathElement() {
+            getClassesJar()
+        }
+
+        @TransformOutput(type = 'classes')
+        File getClassesFolder() {
+            explodedJar
         }
 
         @TransformOutput(type = 'android-manifest')
@@ -126,184 +201,231 @@ import org.gradle.api.artifacts.transform.*
         void transform(File input) {
             assert input.name.endsWith('.aar')
 
-            explodedAar = new File(outputDirectory, input.name)
+            explodedAar = new File(outputDirectory, input.name + '/explodedAar')
+            explodedJar = new File(outputDirectory, input.name + '/explodedClassesJar')
+
             if (!explodedAar.exists()) {
-                antBuilder.unzip(src:  input,
-                                 dest: explodedAar,
-                                 overwrite: "false")
+                files.copy {
+                    from files.zipTree(input)
+                    into explodedAar
+                }
+            }
+            if (!explodedJar.exists()) {
+                files.copy {
+                    from files.zipTree(new File(explodedAar, 'classes.jar'))
+                    into explodedJar
+                }
             }
         }
     }
 
     @TransformInput(type = 'jar')
     class JarClasspathTransform extends DependencyTransform {
-        private File output
+        private Project files
+
+        private File jar
+        private File classesFolder
 
         @TransformOutput(type = 'classpath')
-        File getOutput() {
-            output
+        File getClasspathElement() {
+            jar
+        }
+
+        @TransformOutput(type = 'classes')
+        File getClassesFolder() {
+            classesFolder
         }
 
         void transform(File input) {
-            output = input
+            jar = input
+
+            //We could use a location based on the input, since the classes folder is similar for all consumers.
+            //Maybe the output should not be configured from the outside, but the context of the consumer should
+            //be always passed in autoamtically (as we do with "Project files") here. Then the consumer and
+            //properties of it (e.g. dex options) can be used in the output location
+            classesFolder = new File(outputDirectory, input.name + "/classes")
+            if (!classesFolder.exists()) {
+                files.copy {
+                    from files.zipTree(input)
+                    into classesFolder
+                }
+            }
         }
     }
 
+    @TransformInput(type = 'classes')
+    class ClassesFolderClasspathTransform extends DependencyTransform {
+        private File classesFolder
+
+        @TransformOutput(type = 'classpath')
+        File getClasspathElement() {
+            classesFolder
+        }
+
+        void transform(File input) {
+            classesFolder = input
+        }
+    }
 """
 
+        file('android-app').mkdirs()
+
+        // Android Lib: "Source Code"
+        file('android-lib/classes/main/foo.txt') << "something"
+        file('android-lib/classes/main/bar/baz.txt') << "something"
+        file('android-lib/classes/main/bar/baz.txt') << "something"
+
+        // Android Lib: Manifest and zipped code
         def aarImage = file('android-lib/aar-image')
         aarImage.file('AndroidManifest.xml') << "<AndroidManifest/>"
-        file('android-lib/classes/foo.txt') << "something"
-        file('android-lib/classes/bar/baz.txt') << "something"
-        file('android-lib/classes/bar/baz.txt') << "something"
         file('android-lib/classes').zipTo(aarImage.file('classes.jar'))
 
+        // Publish an AAR
         def module = mavenRepo.module("org.gradle", "ext-android-lib").hasType('aar').publish()
         module.artifactFile.delete()
         aarImage.zipTo(module.artifactFile)
 
-        file('android-app').mkdirs()
-
+        // Publish a JAR
         mavenRepo.module("org.gradle", "ext-java-lib").publish()
     }
 
-    def "compile classpath directly references jars from local java libraries"() {
+    // compileClassesAndResources (unfiltered, no transformations)
+
+    def "compileClassesAndResources references class folder from local java library"() {
         when:
-        usesJarTransformForClasspath()
         dependency "project(':java-lib')"
 
         then:
-        classpath '/java-lib/build/libs/java-lib.jar'
+        artifacts('compileClassesAndResources') == ['/java-lib/build/classes/main']
+        executed ":java-lib:classes"
+        notExecuted ':java-lib:jar'
+    }
 
-        and:
+    def "compileClassesAndResources references classes folder and manifest from local android library"() {
+        when:
+        dependency "project(':android-lib')"
+
+        then:
+        artifacts('compileClassesAndResources') == ['/android-lib/build/classes/main', '/android-lib/aar-image/AndroidManifest.xml']
+        executed ":android-lib:classes"
+        notExecuted ":android-lib:jar"
+        notExecuted ":android-lib:aar"
+    }
+
+    // Working with jars, using 'compile' instead of 'compileClassesAndResources'
+
+    def "compile references jar from local java library"() {
+        when:
+        dependency "project(':java-lib')"
+        dependency "runtime", "project(path: ':java-lib', configuration: 'runtime')" //need to declare 'runtime' as it is not teh default here anymore
+
+        then:
+        artifacts('runtime') == ['/java-lib/build/libs/java-lib.jar']
+        executed ":java-lib:classes"
         executed ':java-lib:jar'
     }
 
-    def "local java libraries can expose classes directory directly as classpath artifact"() {
+    def "compile references classes.jar from local android library"() {
         when:
         dependency "project(':java-lib')"
-
-        and:
-        buildFile << """
-    project(':java-lib') {
-        artifacts {
-            compile(compileJava.destinationDir) {
-                type 'classpath'
-            }
-        }
-    }
-"""
+        dependency "runtime", "project(path: ':android-lib', configuration: 'runtime')"
 
         then:
-        classpath '/java-lib/build/classes/main'
-
-        and:
-        executed ":java-lib:classes"
-
-        // TODO We shouldn't be building the jar in this case, but this will require a much deeper change
-//        notExecuted ":java-lib:jar"
-    }
-
-    def "compile classpath includes classes dir from local android libraries"() {
-        when:
-        usesJarTransformForClasspath()
-        usesAarTransformForClasspath()
-        dependency "project(':android-lib')"
-
-        then:
-        classpath '/transformed/android-lib.aar/classes.jar'
-
-        and:
-        executed ":android-lib:aar"
-    }
-
-    def "local android library can expose classes directory directly as classpath artifact"() {
-        when:
-        dependency "project(':android-lib')"
-
-        and:
-        buildFile << """
-    project(':android-lib') {
-        artifacts {
-            compile(file('classes')) {
-                type 'classpath'
-            }
-        }
-    }
-"""
-
-        then:
-        classpath '/android-lib/classes'
-
-        and:
+        artifacts('runtime') == ['/android-lib/aar-image/classes.jar']
         executed ":android-lib:classes"
-
-        // TODO We shouldn't be building the aar in this case, but this will require a much deeper change
-//        notExecuted ":android-lib:aar"
+        executed ":android-lib:jar"
+        notExecuted ":android-lib:aar"
     }
 
-    def "if local library exposes classes directly as classpath artifact, no classes.jar is exposed"() {
+    // processClasses filtering and transformation
+
+    def "processClasspath includes jars from published java modules"() {
         when:
-        dependency "project(':android-lib')"
-
-        and:
-        buildFile << """
-    project(':android-lib') {
-        artifacts {
-            compile(file('classes')) {
-                type 'classpath'
-            }
-        }
-    }
-"""
-
-        then:
-        notClasspath '/android-app/transformed/android-lib.aar/classes.jar'
-    }
-
-    def "compile classpath includes jars from published java modules"() {
-        when:
-        usesJarTransformForClasspath()
         dependency "'org.gradle:ext-java-lib:1.0'"
 
         then:
-        classpath '/maven-repo/org/gradle/ext-java-lib/1.0/ext-java-lib-1.0.jar'
+        artifacts('processClasspath') == ['/maven-repo/org/gradle/ext-java-lib/1.0/ext-java-lib-1.0.jar']
     }
 
-    def "compile classpath includes classes jar from published android modules"() {
+    def "processClasspath includes classes.jar from published android modules"() {
         when:
-        usesAarTransformForClasspath()
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
-        classpath '/transformed/ext-android-lib-1.0.aar/classes.jar'
+        artifacts('processClasspath') == ['/android-app/transformed/ext-android-lib-1.0.aar/explodedAar/classes.jar']
     }
 
-    def "compile dependencies include a combination of aars and jars"() {
+    def "processClasspath can include jars from file dependencies"() {
         when:
-        usesJarTransformForClasspath()
-        usesAarTransformForClasspath()
+        dependency "gradleApi()"
+
+        then:
+        artifacts('processClasspath').size() > 20
+        output.contains('.jar\n')
+        !output.contains('.jar/classes')
+    }
+
+    def "processClasspath includes a combination of project class folders and library jars"() {
+        when:
         dependency "project(':java-lib')"
         dependency "project(':android-lib')"
         dependency "'org.gradle:ext-java-lib:1.0'"
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
-        classpath '/java-lib/build/libs/java-lib.jar',
-            '/transformed/android-lib.aar/classes.jar',
+        artifacts('processClasspath') == [
+            '/java-lib/build/classes/main',
+            '/android-lib/build/classes/main',
             '/maven-repo/org/gradle/ext-java-lib/1.0/ext-java-lib-1.0.jar',
-            '/transformed/ext-android-lib-1.0.aar/classes.jar'
+            '/android-app/transformed/ext-android-lib-1.0.aar/explodedAar/classes.jar'
+        ]
     }
 
+    // processClasses filtering and transformation
 
-    def "file dependencies are included in classpath"() {
+    def "processClasses includes classes folder from published java modules"() {
         when:
-        usesJarTransformForClasspath()
-        dependency("gradleApi()")
+        dependency "'org.gradle:ext-java-lib:1.0'"
 
         then:
-        classpath 'gradle-core'
+        artifacts('processClasses') == ['/android-app/transformed/ext-java-lib-1.0.jar/classes']
     }
+
+    def "processClasses includes classes folder from published android modules"() {
+        when:
+        dependency "'org.gradle:ext-android-lib:1.0'"
+
+        then:
+        artifacts('processClasses') == ['/android-app/transformed/ext-android-lib-1.0.aar/explodedClassesJar']
+    }
+
+    def "processClasses can include classes folders from file dependencies"() {
+        when:
+        dependency "gradleApi()"
+
+        then:
+        artifacts('processClasses').size() > 20
+        !output.contains('.jar\n')
+        output.contains('.jar/classes')
+    }
+
+    def "processClasses includes class folders from projects and libraries"() {
+        when:
+        dependency "project(':java-lib')"
+        dependency "project(':android-lib')"
+        dependency "'org.gradle:ext-java-lib:1.0'"
+        dependency "'org.gradle:ext-android-lib:1.0'"
+
+        then:
+        artifacts('processClasses') == [
+            '/java-lib/build/classes/main',
+            '/android-lib/build/classes/main',
+            '/android-app/transformed/ext-java-lib-1.0.jar/classes',
+            '/android-app/transformed/ext-android-lib-1.0.aar/explodedClassesJar'
+        ]
+    }
+
+    // processManifests filtering and transformation
 
     def "no manifest for local java library or published java module"() {
         when:
@@ -311,7 +433,7 @@ import org.gradle.api.artifacts.transform.*
         dependency "'org.gradle:ext-java-lib:1.0'"
 
         then:
-        manifest()
+        artifacts('processManifests') == []
     }
 
     def "manifest returned for local android library"() {
@@ -319,7 +441,7 @@ import org.gradle.api.artifacts.transform.*
         dependency "project(':android-lib')"
 
         then:
-        manifest '/transformed/android-lib.aar/AndroidManifest.xml'
+        artifacts('processManifests') == ['/android-lib/aar-image/AndroidManifest.xml']
     }
 
     def "manifest returned for published android module"() {
@@ -327,7 +449,7 @@ import org.gradle.api.artifacts.transform.*
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
-        manifest '/transformed/ext-android-lib-1.0.aar/AndroidManifest.xml'
+        artifacts('processManifests') == ['/android-app/transformed/ext-android-lib-1.0.aar/explodedAar/AndroidManifest.xml']
     }
 
     def "manifests returned for a combination of aars and jars"() {
@@ -338,66 +460,38 @@ import org.gradle.api.artifacts.transform.*
         dependency "'org.gradle:ext-android-lib:1.0'"
 
         then:
-        manifest '/transformed/android-lib.aar/AndroidManifest.xml',
-            '/transformed/ext-android-lib-1.0.aar/AndroidManifest.xml'
+        artifacts('processManifests') == [
+            '/android-lib/aar-image/AndroidManifest.xml',
+            '/android-app/transformed/ext-android-lib-1.0.aar/explodedAar/AndroidManifest.xml'
+        ]
     }
 
-    def usesAarTransformForClasspath() {
-        buildFile << """
-    project(':android-app') {
-        configurations.compileClasspath.resolutionStrategy.registerTransform(AarExtractor)  {
-            outputDirectory = project.file("transformed")
-            antBuilder = project.ant
-        }
-    }
-"""
-    }
-
-    def usesJarTransformForClasspath() {
-        buildFile << """
-    project(':android-app') {
-        configurations.compileClasspath.resolutionStrategy.registerTransform(JarClasspathTransform) {}
-    }
-"""
-    }
 
     def dependency(String notation) {
+        dependency('compileClassesAndResources', notation)
+    }
+
+    def dependency(String configuration, String notation) {
         buildFile << """
-    project(':android-app') {
-        dependencies {
-            compile ${notation}
-        }
-    }
-"""
-    }
-
-    void classpath(String... classpathElements) {
-        assert succeeds('fakeCompile')
-
-        for (String classpathElement : classpathElements) {
-            outputContains(classpathElement)
-        }
+            project(':android-app') {
+                dependencies {
+                    $configuration $notation
+                }
+            }
+        """
     }
 
-    void notClasspath(String... classpathElements) {
-        assert succeeds('fakeCompile')
+    def artifacts(String configuration) {
+        executer.withArgument("-Pconfiguration=$configuration")
 
-        for (String classpathElement : classpathElements) {
-            assertThat("Substring found in build output", getOutput(), CoreMatchers.not(
-                StringContains.containsString(normaliseLineSeparators(classpathElement))));
+        assert succeeds('printArtifacts')
+
+        def result = []
+        output.eachLine { line ->
+            if (line.startsWith("/")) {
+                result.add(line)
+            }
         }
+        result
     }
-
-    void manifest(String... manifests) {
-        assert succeeds('printManifests')
-
-        if (manifests.length == 0) {
-            outputContains('no manifest found')
-        }
-
-        for (String manifest : manifests) {
-            outputContains(manifest)
-        }
-    }
-
 }
