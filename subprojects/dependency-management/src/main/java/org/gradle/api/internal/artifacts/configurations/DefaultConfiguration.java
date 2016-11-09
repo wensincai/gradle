@@ -953,26 +953,22 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 return artifacts;
             }
 
-            Set<ResolvedArtifactResult> filteredArtifacts = Sets.newHashSet();
+            Set<ResolvedArtifactResult> filteredArtifacts = new LinkedHashSet<ResolvedArtifactResult>();
 
             // First attempt to locate artifacts with the correct format
             for (ResolvedArtifactResult artifact : artifacts) {
                 if (artifact.getFormat().equals(format)) {
                     filteredArtifacts.add(artifact);
-                }
-            }
+                } else {
+                    Transformer<File, File> transform = getResolutionStrategy().getTransform(artifact.getFormat(), format);
+                    if (transform != null) {
+                        // TODO: Parallel evaluation and caching
+                        File transformedFile = transform.transform(artifact.getFile());
 
-            // TODO: Parallel evaluation and caching
-            for (ResolvedArtifactResult artifact : artifacts) {
-                // Attempt to transform each artifact
-                Transformer<File, File> transform = getResolutionStrategy().getTransform(artifact.getFormat(), format);
-
-                if (transform != null) {
-                    File transformedFile = transform.transform(artifact.getFile());
-
-                    ResolvedArtifactResult transformedArtifact = new DefaultResolvedArtifactResult(
-                        artifact.getId(), artifact.getType(), format, transformedFile);
-                    filteredArtifacts.add(transformedArtifact);
+                        ResolvedArtifactResult transformedArtifact = new DefaultResolvedArtifactResult(
+                            artifact.getId(), artifact.getType(), format, transformedFile);
+                        filteredArtifacts.add(transformedArtifact);
+                    }
                 }
             }
             return filteredArtifacts;
