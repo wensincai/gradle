@@ -287,6 +287,15 @@ public interface ResolutionStrategy {
     @Incubating
     ResolutionStrategy dependencySubstitution(Action<? super DependencySubstitutions> action);
 
+    /**
+     * Register a dependency transformation.
+     *
+     * @param type implementation type of the dependency transformation
+     * @param config a configuration action
+     *
+     * @see DependencyTransform
+     * @since 3.3
+     */
     @Incubating
     void registerTransform(Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config);
 }

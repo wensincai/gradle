@@ -43,7 +43,6 @@ public class DependencyTransforms {
     }
 
     public void registerTransform(Class<? extends DependencyTransform> type, Action<? super DependencyTransform> config) {
-        // TODO Declare the input and output types statically on the type signatures, rather than via annotations?
         TransformInput transformInput = type.getAnnotation(TransformInput.class);
         if (transformInput == null) {
             throw new RuntimeException("DependencyTransform must statically declare input type using `@TransformInput`");
@@ -87,7 +86,6 @@ public class DependencyTransforms {
         }
     }
 
-    // TODO Make sure we use reflection efficiently
     private static class DependencyTransformTransformer implements Transformer<File, File> {
         private final DependencyTransform dependencyTransform;
         private final JavaMethod<? super DependencyTransform, File> outputProperty;
@@ -103,7 +101,7 @@ public class DependencyTransforms {
                 dependencyTransform.getOutputDirectory().mkdirs();
             }
             dependencyTransform.transform(file);
-            return (File) outputProperty.invoke(dependencyTransform);
+            return outputProperty.invoke(dependencyTransform);
         }
     }
 

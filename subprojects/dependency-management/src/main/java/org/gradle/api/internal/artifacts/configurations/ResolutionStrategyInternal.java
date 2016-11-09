@@ -81,5 +81,10 @@ public interface ResolutionStrategyInternal extends ResolutionStrategy {
      */
     void setMutationValidator(MutationValidator action);
 
+    /**
+     * @param from format to transform from
+     * @param to format to transform to
+     * @return a transform that can transform between the two formats, null if no fitting transform is registered
+     */
     Transformer<File, File> getTransform(String from, String to);
 }

@@ -37,7 +37,6 @@ import org.gradle.api.artifacts.PublishArtifactSet;
 import org.gradle.api.artifacts.ResolutionStrategy;
 import org.gradle.api.artifacts.ResolvableDependencies;
 import org.gradle.api.artifacts.ResolvedConfiguration;
-import org.gradle.api.artifacts.component.ComponentArtifactIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.result.ResolutionResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
@@ -963,7 +962,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 }
             }
 
-            // TODO: Parallel evaluation
+            // TODO: Parallel evaluation and caching
             for (ResolvedArtifactResult artifact : artifacts) {
                 // Attempt to transform each artifact
                 Transformer<File, File> transform = getResolutionStrategy().getTransform(artifact.getFormat(), format);
@@ -971,9 +970,8 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 if (transform != null) {
                     File transformedFile = transform.transform(artifact.getFile());
 
-                    ComponentArtifactIdentifier transformedIdentifier = artifact.getId(); //TODO does the identifier also need to be transformed?
                     ResolvedArtifactResult transformedArtifact = new DefaultResolvedArtifactResult(
-                        transformedIdentifier, artifact.getType(), format, transformedFile);
+                        artifact.getId(), artifact.getType(), format, transformedFile);
                     filteredArtifacts.add(transformedArtifact);
                 }
             }
