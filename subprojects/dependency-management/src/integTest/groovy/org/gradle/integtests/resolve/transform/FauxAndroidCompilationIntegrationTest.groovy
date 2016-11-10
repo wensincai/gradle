@@ -171,29 +171,29 @@ public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyRes
         }
     }
 
-    @TransformInput(type = 'aar')
+    @TransformInput(format = 'aar')
     class AarExtractor extends DependencyTransform {
         private Project files
 
         private File explodedAar
         private File explodedJar
 
-        @TransformOutput(type = 'jar')
+        @TransformOutput(format = 'jar')
         File getClassesJar() {
             new File(explodedAar, "classes.jar")
         }
 
-        @TransformOutput(type = 'classpath')
+        @TransformOutput(format = 'classpath')
         File getClasspathElement() {
             getClassesJar()
         }
 
-        @TransformOutput(type = 'classes')
+        @TransformOutput(format = 'classes')
         File getClassesFolder() {
             explodedJar
         }
 
-        @TransformOutput(type = 'android-manifest')
+        @TransformOutput(format = 'android-manifest')
         File getManifest() {
             new File(explodedAar, "AndroidManifest.xml")
         }
@@ -219,19 +219,19 @@ public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyRes
         }
     }
 
-    @TransformInput(type = 'jar')
+    @TransformInput(format = 'jar')
     class JarClasspathTransform extends DependencyTransform {
         private Project files
 
         private File jar
         private File classesFolder
 
-        @TransformOutput(type = 'classpath')
+        @TransformOutput(format = 'classpath')
         File getClasspathElement() {
             jar
         }
 
-        @TransformOutput(type = 'classes')
+        @TransformOutput(format = 'classes')
         File getClassesFolder() {
             classesFolder
         }
@@ -253,11 +253,11 @@ public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyRes
         }
     }
 
-    @TransformInput(type = 'classes')
+    @TransformInput(format = 'classes')
     class ClassesFolderClasspathTransform extends DependencyTransform {
         private File classesFolder
 
-        @TransformOutput(type = 'classpath')
+        @TransformOutput(format = 'classpath')
         File getClasspathElement() {
             classesFolder
         }

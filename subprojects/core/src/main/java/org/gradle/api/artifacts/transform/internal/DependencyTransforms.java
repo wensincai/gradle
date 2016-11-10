@@ -47,7 +47,7 @@ public class DependencyTransforms {
         if (transformInput == null) {
             throw new RuntimeException("DependencyTransform must statically declare input type using `@TransformInput`");
         }
-        String from = transformInput.type();
+        String from = transformInput.format();
 
         for (Class current = type; current != null; current = current.getSuperclass()) {
             for (Method method : current.getDeclaredMethods()) {
@@ -56,7 +56,7 @@ public class DependencyTransforms {
                     continue;
                 }
 
-                String to = transformOutput.type();
+                String to = transformOutput.format();
                 JavaMethod<? super DependencyTransform, File> javaMethod = JavaReflectionUtil.method(File.class, method);
                 DependencyTransformRegistration registration = new DependencyTransformRegistration(from, to, type, javaMethod, config);
                 transforms.add(registration);
