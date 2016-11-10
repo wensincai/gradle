@@ -34,7 +34,7 @@ import org.gradle.integtests.fixtures.AbstractDependencyResolutionTest
  *
  * - processClasspath               filters and transforms to 'classpath' format (e.g. keeps jars, but extracts 'classes.jar' from external AAR)
  * - processClasses                 filters and transforms to 'classes' format (e.g. extracts jars to class folders)
- * - processManifests               filters for 'android-manifest' format (no transformations taking place)
+ * - processManifests               filters for 'android-manifest' format (no transformation for local libraries, extraction from aar)
  */
 public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyResolutionTest {
 
@@ -46,7 +46,7 @@ public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyRes
     include 'android-app'
 """
         buildFile << """
-import org.gradle.api.artifacts.transform.*
+    import org.gradle.api.artifacts.transform.*
 
     project(':java-lib') {
         apply plugin: 'java'
