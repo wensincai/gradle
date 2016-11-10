@@ -40,253 +40,285 @@ public class FauxAndroidCompilationIntegrationTest extends AbstractDependencyRes
 
     def setup() {
         settingsFile << """
-    rootProject.name = 'fake-android-build'
-    include 'java-lib'
-    include 'android-lib'
-    include 'android-app'
-"""
+            rootProject.name = 'fake-android-build'
+            include 'java-lib'
+            include 'android-lib'
+            include 'android-app'
+        """.stripIndent()
+
         buildFile << """
-    import org.gradle.api.artifacts.transform.*
+            import org.gradle.api.artifacts.transform.*
 
-    project(':java-lib') {
-        apply plugin: 'java'
+            ${javaLibWithClassFolderArtifact('java-lib')}
+            ${mockedAndroidLib('android-lib')}
+            ${mockedAndroidApp('android-app')}
 
-        configurations {
-            compileClassesAndResources
-
-        }
-        configurations.default.extendsFrom = [configurations.compileClassesAndResources] //setter removes extendFrom(runtime)
-
-        artifacts {
-            compileClassesAndResources(compileJava.destinationDir) {
-                type 'classes'
-                builtBy classes
-            }
-        }
+            ${aarTransform()}
+            ${jarTransform()}
+            ${classFolderTransform()}
+        """.stripIndent()
     }
 
-    project(':android-lib') {
-        apply plugin: 'base'
+    def javaLibWithClassFolderArtifact(String name) {
+        // Publish an external version as JAR
+        mavenRepo.module("org.gradle", "ext-$name").publish()
 
-        configurations {
-            compileClassesAndResources
-            runtime //compiles JAR as in Java plugin
-            compileAAR
-        }
-        configurations.default.extendsFrom = [configurations.compileClassesAndResources]
+        """
+        project(':$name') {
+            apply plugin: 'java'
 
-        task classes(type: Copy) {
-            from file('classes/main')
-            into file('build/classes/main')
-        }
+            configurations {
+                compileClassesAndResources
 
-        task jar(type: Zip) {
-            dependsOn classes
-            from classes.destinationDir
-            destinationDir = file('aar-image')
-            baseName = 'classes'
-            extension = 'jar'
-        }
-
-        task aar(type: Zip) {
-            dependsOn jar
-            from file('aar-image')
-            destinationDir = file('build')
-            extension = 'aar'
-        }
-
-        artifacts {
-            compileClassesAndResources(classes.destinationDir) {
-                type 'classes'
-                builtBy classes
             }
-            compileClassesAndResources(file('aar-image/AndroidManifest.xml')) {
-                type 'android-manifest'
-            }
+            configurations.default.extendsFrom = [configurations.compileClassesAndResources] //setter removes extendFrom(runtime)
 
-            runtime jar
-
-            compileAAR aar
-        }
-    }
-
-    project(':android-app') {
-        apply plugin: 'base'
-
-        configurations {
-            compileClassesAndResources
-            runtime
-
-            // configurations with filtering/transformation over 'compile'
-            processClasspath {
-                extendsFrom(compileClassesAndResources)
-                format = 'classpath' // 'classes' or 'jar'
-                resolutionStrategy {
-                    registerTransform(AarExtractor)  {
-                        outputDirectory = project.file("transformed")
-                        files = project
-                    }
-                    registerTransform(JarClasspathTransform) {
-                        outputDirectory = project.file("transformed")
-                        files = project
-                    }
-                    registerTransform(ClassesFolderClasspathTransform) { }
-                }
-            }
-            processClasses {
-                extendsFrom(compileClassesAndResources)
-                format = 'classes'
-                resolutionStrategy {
-                    registerTransform(AarExtractor)  {
-                        outputDirectory = project.file("transformed")
-                        files = project
-                    }
-                    registerTransform(JarClasspathTransform) {
-                        outputDirectory = project.file("transformed")
-                        files = project
-                    }
-                }
-            }
-            processManifests {
-                extendsFrom(compileClassesAndResources)
-                format = 'android-manifest'
-                resolutionStrategy {
-                    registerTransform(AarExtractor)  {
-                        outputDirectory = project.file("transformed")
-                        files = project
-                    }
+            artifacts {
+                compileClassesAndResources(compileJava.destinationDir) {
+                    type 'classes'
+                    builtBy classes
                 }
             }
         }
-
-        repositories {
-            maven { url '${mavenRepo.uri}' }
-        }
-
-        task printArtifacts {
-            dependsOn configurations[configuration]
-            doLast {
-                configurations[configuration].incoming.artifacts.each { println it.file.absolutePath - rootDir }
-            }
-        }
+        """
     }
 
-    @TransformInput(format = 'aar')
-    class AarExtractor extends DependencyTransform {
-        private Project files
-
-        private File explodedAar
-        private File explodedJar
-
-        @TransformOutput(format = 'jar')
-        File getClassesJar() {
-            new File(explodedAar, "classes.jar")
-        }
-
-        @TransformOutput(format = 'classpath')
-        File getClasspathElement() {
-            getClassesJar()
-        }
-
-        @TransformOutput(format = 'classes')
-        File getClassesFolder() {
-            explodedJar
-        }
-
-        @TransformOutput(format = 'android-manifest')
-        File getManifest() {
-            new File(explodedAar, "AndroidManifest.xml")
-        }
-
-        void transform(File input) {
-            assert input.name.endsWith('.aar')
-
-            explodedAar = new File(outputDirectory, input.name + '/explodedAar')
-            explodedJar = new File(outputDirectory, input.name + '/explodedClassesJar')
-
-            if (!explodedAar.exists()) {
-                files.copy {
-                    from files.zipTree(input)
-                    into explodedAar
-                }
-            }
-            if (!explodedJar.exists()) {
-                files.copy {
-                    from files.zipTree(new File(explodedAar, 'classes.jar'))
-                    into explodedJar
-                }
-            }
-        }
-    }
-
-    @TransformInput(format = 'jar')
-    class JarClasspathTransform extends DependencyTransform {
-        private Project files
-
-        private File jar
-        private File classesFolder
-
-        @TransformOutput(format = 'classpath')
-        File getClasspathElement() {
-            jar
-        }
-
-        @TransformOutput(format = 'classes')
-        File getClassesFolder() {
-            classesFolder
-        }
-
-        void transform(File input) {
-            jar = input
-
-            //We could use a location based on the input, since the classes folder is similar for all consumers.
-            //Maybe the output should not be configured from the outside, but the context of the consumer should
-            //be always passed in autoamtically (as we do with "Project files") here. Then the consumer and
-            //properties of it (e.g. dex options) can be used in the output location
-            classesFolder = new File(outputDirectory, input.name + "/classes")
-            if (!classesFolder.exists()) {
-                files.copy {
-                    from files.zipTree(input)
-                    into classesFolder
-                }
-            }
-        }
-    }
-
-    @TransformInput(format = 'classes')
-    class ClassesFolderClasspathTransform extends DependencyTransform {
-        private File classesFolder
-
-        @TransformOutput(format = 'classpath')
-        File getClasspathElement() {
-            classesFolder
-        }
-
-        void transform(File input) {
-            classesFolder = input
-        }
-    }
-"""
-
-        file('android-app').mkdirs()
-
-        // Android Lib: "Source Code"
-        file('android-lib/classes/main/foo.txt') << "something"
-        file('android-lib/classes/main/bar/baz.txt') << "something"
-        file('android-lib/classes/main/bar/baz.txt') << "something"
-
-        // Android Lib: Manifest and zipped code
+    def mockedAndroidLib(String name) {
+        // "Source" code
+        file("$name/classes/main/foo.txt") << "something"
+        file("$name/classes/main/bar/baz.txt") << "something"
+        file("$name/classes/main/bar/baz.txt") << "something"
+        // Manifest and zipped code
         def aarImage = file('android-lib/aar-image')
         aarImage.file('AndroidManifest.xml') << "<AndroidManifest/>"
         file('android-lib/classes').zipTo(aarImage.file('classes.jar'))
 
-        // Publish an AAR
-        def module = mavenRepo.module("org.gradle", "ext-android-lib").hasType('aar').publish()
+        // Publish an external version as AAR
+        def module = mavenRepo.module("org.gradle", "ext-$name").hasType('aar').publish()
         module.artifactFile.delete()
         aarImage.zipTo(module.artifactFile)
 
-        // Publish a JAR
-        mavenRepo.module("org.gradle", "ext-java-lib").publish()
+        """
+        project(':$name') {
+            apply plugin: 'base'
+
+            configurations {
+                compileClassesAndResources
+                runtime //compiles JAR as in Java plugin
+                compileAAR
+            }
+            configurations.default.extendsFrom = [configurations.compileClassesAndResources]
+
+            task classes(type: Copy) {
+                from file('classes/main')
+                into file('build/classes/main')
+            }
+
+            task jar(type: Zip) {
+                dependsOn classes
+                from classes.destinationDir
+                destinationDir = file('aar-image')
+                baseName = 'classes'
+                extension = 'jar'
+            }
+
+            task aar(type: Zip) {
+                dependsOn jar
+                from file('aar-image')
+                destinationDir = file('build')
+                extension = 'aar'
+            }
+
+            artifacts {
+                compileClassesAndResources(classes.destinationDir) {
+                    type 'classes'
+                    builtBy classes
+                }
+                compileClassesAndResources(file('aar-image/AndroidManifest.xml')) {
+                    type 'android-manifest'
+                }
+
+                runtime jar
+
+                compileAAR aar
+            }
+        }
+        """
+    }
+
+    def mockedAndroidApp(String name) {
+        file('android-app').mkdirs()
+
+        """
+        project(':$name') {
+            apply plugin: 'base'
+
+            configurations {
+                compileClassesAndResources
+                runtime
+
+                // configurations with filtering/transformation over 'compile'
+                processClasspath {
+                    extendsFrom(compileClassesAndResources)
+                    format = 'classpath' // 'classes' or 'jar'
+                    resolutionStrategy {
+                        registerTransform(AarExtractor)  {
+                            outputDirectory = project.file("transformed")
+                            files = project
+                        }
+                        registerTransform(JarClasspathTransform) {
+                            outputDirectory = project.file("transformed")
+                            files = project
+                        }
+                        registerTransform(ClassesFolderClasspathTransform) { }
+                    }
+                }
+                processClasses {
+                    extendsFrom(compileClassesAndResources)
+                    format = 'classes'
+                    resolutionStrategy {
+                        registerTransform(AarExtractor)  {
+                            outputDirectory = project.file("transformed")
+                            files = project
+                        }
+                        registerTransform(JarClasspathTransform) {
+                            outputDirectory = project.file("transformed")
+                            files = project
+                        }
+                    }
+                }
+                processManifests {
+                    extendsFrom(compileClassesAndResources)
+                    format = 'android-manifest'
+                    resolutionStrategy {
+                        registerTransform(AarExtractor)  {
+                            outputDirectory = project.file("transformed")
+                            files = project
+                        }
+                    }
+                }
+            }
+
+            repositories {
+                maven { url '${mavenRepo.uri}' }
+            }
+
+            task printArtifacts {
+                dependsOn configurations[configuration]
+                doLast {
+                    configurations[configuration].incoming.artifacts.each { println it.file.absolutePath - rootDir }
+                }
+            }
+        }
+        """
+    }
+
+    def aarTransform() {
+        """
+        @TransformInput(format = 'aar')
+        class AarExtractor extends DependencyTransform {
+            private Project files
+
+            private File explodedAar
+            private File explodedJar
+
+            @TransformOutput(format = 'jar')
+            File getClassesJar() {
+                new File(explodedAar, "classes.jar")
+            }
+
+            @TransformOutput(format = 'classpath')
+            File getClasspathElement() {
+                getClassesJar()
+            }
+
+            @TransformOutput(format = 'classes')
+            File getClassesFolder() {
+                explodedJar
+            }
+
+            @TransformOutput(format = 'android-manifest')
+            File getManifest() {
+                new File(explodedAar, "AndroidManifest.xml")
+            }
+
+            void transform(File input) {
+                assert input.name.endsWith('.aar')
+
+                explodedAar = new File(outputDirectory, input.name + '/explodedAar')
+                explodedJar = new File(outputDirectory, input.name + '/explodedClassesJar')
+
+                if (!explodedAar.exists()) {
+                    files.copy {
+                        from files.zipTree(input)
+                        into explodedAar
+                    }
+                }
+                if (!explodedJar.exists()) {
+                    files.copy {
+                        from files.zipTree(new File(explodedAar, 'classes.jar'))
+                        into explodedJar
+                    }
+                }
+            }
+        }
+        """
+    }
+
+    def jarTransform() {
+        """
+        @TransformInput(format = 'jar')
+        class JarClasspathTransform extends DependencyTransform {
+            private Project files
+
+            private File jar
+            private File classesFolder
+
+            @TransformOutput(format = 'classpath')
+            File getClasspathElement() {
+                jar
+            }
+
+            @TransformOutput(format = 'classes')
+            File getClassesFolder() {
+                classesFolder
+            }
+
+            void transform(File input) {
+                jar = input
+
+                //We could use a location based on the input, since the classes folder is similar for all consumers.
+                //Maybe the output should not be configured from the outside, but the context of the consumer should
+                //be always passed in autoamtically (as we do with "Project files") here. Then the consumer and
+                //properties of it (e.g. dex options) can be used in the output location
+                classesFolder = new File(outputDirectory, input.name + "/classes")
+                if (!classesFolder.exists()) {
+                    files.copy {
+                        from files.zipTree(input)
+                        into classesFolder
+                    }
+                }
+            }
+        }
+        """
+    }
+
+    def classFolderTransform() {
+        """
+        @TransformInput(format = 'classes')
+        class ClassesFolderClasspathTransform extends DependencyTransform {
+            private File classesFolder
+
+            @TransformOutput(format = 'classpath')
+            File getClasspathElement() {
+                classesFolder
+            }
+
+            void transform(File input) {
+                classesFolder = input
+            }
+        }
+        """
     }
 
     // compileClassesAndResources (unfiltered, no transformations)
