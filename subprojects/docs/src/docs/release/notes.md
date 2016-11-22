@@ -163,6 +163,7 @@ We would like to thank the following community members for making contributions 
  - [Jörn Huxhorn](https://github.com/huxi) - Fix "Connection refused" integTest assertions (#788)
  - [Punyashloka Biswal](https://github.com/punya) - Fix Checkstyle classpath is set incorrectly for multi-project builds (#855)
  - [Dan Kim](https://github.com/deekim) - Use AssertionError in RetryFailure (#776)
+ - [Alex Arana](https://github.com/alex-arana) - Fail build if maximum Checkstyle warnings or errors threshold exceeded (#881)
 
 <!--
  - [Some person](https://github.com/some-person) - fixed some issue (GRADLE-1234)
