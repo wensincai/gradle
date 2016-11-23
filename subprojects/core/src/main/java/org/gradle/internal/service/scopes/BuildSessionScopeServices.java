@@ -41,6 +41,7 @@ import org.gradle.internal.operations.BuildOperationWorkerRegistry;
 import org.gradle.internal.operations.DefaultBuildOperationProcessor;
 import org.gradle.internal.operations.DefaultBuildOperationQueueFactory;
 import org.gradle.internal.operations.DefaultBuildOperationWorkerRegistry;
+import org.gradle.internal.logging.events.OutputEventListener;
 import org.gradle.internal.remote.MessagingServer;
 import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.service.ServiceRegistration;
@@ -100,7 +101,9 @@ public class BuildSessionScopeServices extends DefaultServiceRegistry {
             startParameter.getGradleUserHomeDir(),
             temporaryFileProvider,
             execHandleFactory,
-            jvmVersionDetector);
+            jvmVersionDetector,
+            get(OutputEventListener.class)
+            );
     }
 
     ClassPathRegistry createClassPathRegistry() {
