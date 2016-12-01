@@ -16,12 +16,40 @@
 
 package org.gradle.process.internal.health.memory;
 
-public interface MemoryStatus {
-    long getMaxMemory();
+import org.gradle.api.Nullable;
 
-    long getCommittedMemory();
+public class MemoryStatus {
+    private final long maxMemory;
+    private final long committedMemory;
+    private final Long totalPhysicalMemory;
+    private final Long freePhysicalMemory;
 
-    long getTotalPhysicalMemory();
+    public MemoryStatus(long maxMemory, long committedMemory, @Nullable Long totalPhysicalMemory, @Nullable Long freePhysicalMemory) {
+        this.maxMemory = maxMemory;
+        this.committedMemory = committedMemory;
+        this.totalPhysicalMemory = totalPhysicalMemory;
+        this.freePhysicalMemory = freePhysicalMemory;
+    }
 
-    long getFreePhysicalMemory();
+    public long getMaxMemory() {
+        return maxMemory;
+    }
+
+    public long getCommittedMemory() {
+        return committedMemory;
+    }
+
+    @Nullable
+    public Long getTotalPhysicalMemory() {
+        return totalPhysicalMemory;
+    }
+
+    @Nullable
+    public Long getFreePhysicalMemory() {
+        return freePhysicalMemory;
+    }
+
+    public String toString() {
+        return "{ Max: " + maxMemory + ", Committed: " + committedMemory + ", TotalPhysical: " + totalPhysicalMemory + " FreePhysical: " + freePhysicalMemory + " }";
+    }
 }

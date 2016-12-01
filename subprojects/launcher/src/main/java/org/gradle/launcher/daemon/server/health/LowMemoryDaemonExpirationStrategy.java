@@ -34,7 +34,7 @@ public class LowMemoryDaemonExpirationStrategy implements DaemonExpirationStrate
     private ReentrantLock lock = new ReentrantLock();
     private MemoryStatus memoryStatus;
     private final double minFreeMemoryPercentage;
-    private long memoryThresholdInBytes;
+    private Long memoryThresholdInBytes;
     private static final Logger LOG = Logging.getLogger(LowMemoryDaemonExpirationStrategy.class);
 
     public static final String EXPIRATION_REASON = "to reclaim system memory";
@@ -56,9 +56,9 @@ public class LowMemoryDaemonExpirationStrategy implements DaemonExpirationStrate
     public DaemonExpirationResult checkExpiration() {
         lock.lock();
         try {
-            if (memoryStatus != null) {
-                long freeMem = memoryStatus.getFreePhysicalMemory();
-                if (freeMem < memoryThresholdInBytes) {
+            if (memoryStatus != null && memoryThresholdInBytes != null) {
+                Long freeMem = memoryStatus.getFreePhysicalMemory();
+                if (freeMem != null && freeMem < memoryThresholdInBytes) {
                     LOG.info("after free system memory (" + NumberUtil.formatBytes(freeMem) + ") fell below threshold of " + NumberUtil.formatBytes(memoryThresholdInBytes));
                     return new DaemonExpirationResult(GRACEFUL_EXPIRE, EXPIRATION_REASON);
                 }
@@ -67,7 +67,6 @@ public class LowMemoryDaemonExpirationStrategy implements DaemonExpirationStrate
             lock.unlock();
         }
         return DaemonExpirationResult.NOT_TRIGGERED;
-
     }
 
     @Override
@@ -76,10 +75,14 @@ public class LowMemoryDaemonExpirationStrategy implements DaemonExpirationStrate
         try {
             LOG.debug("Received memory status update: " + memoryStatus.toString());
             this.memoryStatus = memoryStatus;
-            this.memoryThresholdInBytes = normalizeThreshold((long) (memoryStatus.getTotalPhysicalMemory() * minFreeMemoryPercentage), MIN_THRESHOLD_BYTES, MAX_THRESHOLD_BYTES);
+            Long totalMem = memoryStatus.getTotalPhysicalMemory();
+            if (totalMem != null) {
+                this.memoryThresholdInBytes = normalizeThreshold((long) (totalMem * minFreeMemoryPercentage), MIN_THRESHOLD_BYTES, MAX_THRESHOLD_BYTES);
+            } else {
+                this.memoryThresholdInBytes = null;
+            }
         } finally {
             lock.unlock();
         }
-
     }
 }

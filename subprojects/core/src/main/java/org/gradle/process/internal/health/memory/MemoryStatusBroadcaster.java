@@ -40,13 +40,8 @@ public class MemoryStatusBroadcaster {
     }
 
     public void start() {
-        try {
-            memoryInfo.getFreePhysicalMemory();
-            scheduledExecutorService.scheduleAtFixedRate(getMemoryCheck(), 1, STATUS_INTERVAL, TimeUnit.SECONDS);
-            LOGGER.debug("Memory status broadcaster started");
-        } catch (UnsupportedOperationException e) {
-            LOGGER.info("This JVM does not support getting free system memory, so no memory status updates will be broadcast");
-        }
+        scheduledExecutorService.scheduleAtFixedRate(getMemoryCheck(), 1, STATUS_INTERVAL, TimeUnit.SECONDS);
+        LOGGER.debug("Memory status broadcaster started");
     }
 
     private Runnable getMemoryCheck() {
