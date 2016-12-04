@@ -31,8 +31,8 @@ import org.gradle.internal.concurrent.StoppableExecutor;
 import org.gradle.internal.serialize.Serializer;
 
 import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -48,7 +48,7 @@ public class DefaultCacheAccess implements CacheCoordinator {
     private final FileLockManager lockManager;
     private final ExecutorFactory executorFactory;
     private final FileAccess fileAccess = new UnitOfWorkFileAccess();
-    private final Set<MultiProcessSafePersistentIndexedCache> caches = new HashSet<MultiProcessSafePersistentIndexedCache>();
+    private final Map<String, MultiProcessSafePersistentIndexedCache> caches = new HashMap<String, MultiProcessSafePersistentIndexedCache>();
     private final AbstractCrossProcessCacheAccess crossProcessCacheAccess;
     private final LockOptions lockOptions;
 
@@ -311,33 +311,35 @@ public class DefaultCacheAccess implements CacheCoordinator {
     }
 
     public <K, V> MultiProcessSafePersistentIndexedCache<K, V> newCache(final PersistentIndexedCacheParameters<K, V> parameters) {
-        final File cacheFile = new File(baseDir, parameters.getCacheName() + ".bin");
-        LOG.info("Creating new cache for {}, path {}, access {}", parameters.getCacheName(), cacheFile, this);
-        Factory<BTreePersistentIndexedCache<K, V>> indexedCacheFactory = new Factory<BTreePersistentIndexedCache<K, V>>() {
-            public BTreePersistentIndexedCache<K, V> create() {
-                return doCreateCache(cacheFile, parameters.getKeySerializer(), parameters.getValueSerializer());
-            }
-        };
-
-        MultiProcessSafePersistentIndexedCache<K, V> indexedCache = new DefaultMultiProcessSafePersistentIndexedCache<K, V>(indexedCacheFactory, fileAccess);
-        CacheDecorator decorator = parameters.getCacheDecorator();
-        if (decorator != null) {
-            indexedCache = decorator.decorate(cacheFile.getAbsolutePath(), parameters.getCacheName(), indexedCache, crossProcessCacheAccess, getCacheAccessWorker());
-            if (fileLock == null) {
-                useCache("Initial operation", new Runnable() {
-                    @Override
-                    public void run() {
-                        // Empty initial operation to trigger onStartWork calls
-                    }
-                });
-            }
-        }
-
         lock.lock();
+        MultiProcessSafePersistentIndexedCache<K, V> indexedCache = caches.get(parameters.getCacheName());
         try {
-            caches.add(indexedCache);
-            if (fileLock != null) {
-                indexedCache.afterLockAcquire(stateAtOpen);
+            if (indexedCache == null) {
+                final File cacheFile = new File(baseDir, parameters.getCacheName() + ".bin");
+                LOG.info("Creating new cache for {}, path {}, access {}", parameters.getCacheName(), cacheFile, this);
+                Factory<BTreePersistentIndexedCache<K, V>> indexedCacheFactory = new Factory<BTreePersistentIndexedCache<K, V>>() {
+                    public BTreePersistentIndexedCache<K, V> create() {
+                        return doCreateCache(cacheFile, parameters.getKeySerializer(), parameters.getValueSerializer());
+                    }
+                };
+
+                indexedCache = new DefaultMultiProcessSafePersistentIndexedCache<K, V>(indexedCacheFactory, fileAccess);
+                CacheDecorator decorator = parameters.getCacheDecorator();
+                if (decorator != null) {
+                    indexedCache = decorator.decorate(cacheFile.getAbsolutePath(), parameters.getCacheName(), indexedCache, crossProcessCacheAccess, getCacheAccessWorker());
+                    if (fileLock == null) {
+                        useCache("Initial operation", new Runnable() {
+                            @Override
+                            public void run() {
+                                // Empty initial operation to trigger onStartWork calls
+                            }
+                        });
+                    }
+                }
+                caches.put(parameters.getCacheName(), indexedCache);
+                if (fileLock != null) {
+                    indexedCache.afterLockAcquire(stateAtOpen);
+                }
             }
         } finally {
             lock.unlock();
@@ -365,7 +367,7 @@ public class DefaultCacheAccess implements CacheCoordinator {
         this.stateAtOpen = fileLock.getState();
         takeOwnershipNow("initialise caches");
         try {
-            for (UnitOfWorkParticipant cache : caches) {
+            for (UnitOfWorkParticipant cache : caches.values()) {
                 cache.afterLockAcquire(stateAtOpen);
             }
         } finally {
@@ -386,13 +388,13 @@ public class DefaultCacheAccess implements CacheCoordinator {
             takeOwnershipNow("release caches");
             try {
                 // Notify caches that lock is to be released. The caches may do work on the cache files during this
-                for (MultiProcessSafePersistentIndexedCache cache : caches) {
+                for (MultiProcessSafePersistentIndexedCache cache : caches.values()) {
                     cache.finishWork();
                 }
 
                 // Snapshot the state and notify the caches
                 FileLock.State state = fileLock.getState();
-                for (MultiProcessSafePersistentIndexedCache cache : caches) {
+                for (MultiProcessSafePersistentIndexedCache cache : caches.values()) {
                     cache.beforeLockRelease(state);
                 }
             } finally {
